@@ -66,6 +66,8 @@ pip install -e ".[dev]"
 
 Explore the example notebooks in the `deploy/` directory:
 - **`cvar_basic.ipynb`**: Complete walkthrough of Mean-CVaR portfolio optimization with GPU acceleration
+- ** `efficient_frontier.ipynb`**: A quick tutorial on how to generate efficient frontier.
+- ** `rebalancing_strategies.ipynb`** Introduction to dynamic re-balancing and examples of testing strategies
 
 ## Contribution Guidelines
 
