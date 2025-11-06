@@ -729,7 +729,7 @@ def evaluate_user_input_portfolios(
     return custom_portfolios
 
 
-def create_beautiful_efficient_frontier(
+def create_efficient_frontier(
     input_file_name: str,
     regime_dict: dict,
     return_type: str,
@@ -800,7 +800,7 @@ def create_beautiful_efficient_frontier(
 
     Example:
         >>> regime = {"name": "full_period", "range": ("2020-01-01", "2023-12-31")}
-        >>> results_df, fig, ax = create_beautiful_efficient_frontier(
+        >>> results_df, fig, ax = create_efficient_frontier(
         ...     "data/stock_data/sp500.csv",
         ...     regime,
         ...     "LOG",
