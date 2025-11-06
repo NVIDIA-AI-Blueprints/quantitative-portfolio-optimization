@@ -8,21 +8,18 @@ Portfolio Optimization (PO) involves solving high-dimensional, non-linear numeri
 
 ### Key Features
 
-- **GPU-Accelerated Optimization**: Leverages NVIDIA cuOpt LP/QP solvers for dramatic speedups
-- **Multiple Risk Measures**: Supports mean-variance and Conditional Value-at-Risk (CVaR) optimization
+- **GPU-Accelerated Optimization**: Leverages NVIDIA cuOpt LP/MILP solvers for dramatic speedups
+- **Advanced Risk Measure**: Supports Conditional Value-at-Risk (CVaR) optimization
 - **Real-World Constraints**: Implements concentration limits, leverage constraints, turnover limits, and cardinality constraints
 - **Scenario Generation**: Uses GPU-accelerated KDE (Kernel Density Estimation) for return distribution modeling
 - **Backtesting Framework**: Comprehensive tools for evaluating portfolio performance
+- **Dynamic Re-Balancing** Backtesting tools for testing re-balancing strategies
 
 ### Why Portfolio Optimization Matters
 
 Portfolio Management (PM) is crucial for all investment-focused institutions, including buy-side and sell-side operations across asset classes. As financial markets grow in complexity and diversity, the demand for sophisticated PM techniques increases. Currently, most institutions rely on CPUs and third-party solvers, which can be slow and costly. GPU acceleration offers a path to faster, more efficient, and more scalable portfolio optimization solutions.
 
 ### Optimization Methods
-
-This project focuses on two prominent risk measures used in practice:
-
-**Mean-Variance Optimization**: Pioneered by Harry Markowitz, this approach evaluates portfolios by balancing expected return against variance, providing a fundamental trade-off between risk and return.
 
 **CVaR Optimization**: Conditional Value-at-Risk offers a more nuanced assessment of risk by focusing on the tail end of the loss distribution. Unlike Value-at-Risk (VaR), CVaR accounts for the average of losses that exceed a threshold, providing a more comprehensive measure of extreme risks. This approach is particularly valuable for portfolios with asymmetric return distributions.
 
