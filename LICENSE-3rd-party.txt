@@ -11,7 +11,7 @@ Apache License, Version 2.0
 The Apache License, Version 2.0 is a permissive license that also provides an express grant of patent rights. 
 
 Packages under the Apache License, Version 2.0:
-    - cvxpy   
+    - CVXPY - Copyright, the CVXPY authors
 
 
 Full Apache License, Version 2.0 Text:
@@ -77,11 +77,10 @@ BSD License
 The BSD License is a permissive license
 
 Packages under BSD License
-   - numpy
-   - pandas
-   - scipy
-   - scikit-learn 
-   - seaborn
+   - numpy - Copyright (c) 2005-2025, NumPy Developers.
+   - pandas - Copyright (c) 2008-2011, AQR Capital Management, LLC, Lambda Foundry, Inc. and PyData Development Team.
+   - scikit-learn Copyright 2007 - 2025, scikit-learn developers 
+   - seaborn - Copyright 2012-2024, Michael Waskom.
 
 Full BSD License Text:
 --------------------------------------------------
