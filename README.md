@@ -1,4 +1,4 @@
-# GPU-Accelerated Portfolio Optimization
+# Quantitative Portfolio Optimization developer example
 
 ## Overview
 
@@ -33,9 +33,76 @@ Portfolio Management (PM) is crucial for all investment-focused institutions, in
 
 ## Get Started
 
-### Prerequisites
-- NVIDIA GPU with CUDA support
-- Docker with NVIDIA Container Toolkit (for containerized deployment)
+### System Requirements
+
+This project uses NVIDIA cuOpt and requires the same system specifications. For complete details, see the [cuOpt System Requirements](https://docs.nvidia.com/cuopt/user-guide/latest/system-requirements.html).
+
+#### Minimum Requirements
+
+- **System Architecture**:
+  - x86-64
+  - ARM64
+- **GPU**:
+  - Volta architecture or better (Compute Capability >=7.0)
+- **CPU**:
+  - 4+ cores
+- **System Memory**:
+  - 16+ GB RAM
+- **NVMe SSD Storage**:
+  - 100+ GB free space
+- **CUDA**:
+  - 12.0+
+- **Python**:
+  - 3.10.x - 3.13.x
+- **NVIDIA Drivers**:
+  - 525.60.13+ (Linux)
+  - 527.41+ (Windows)
+- **OS**:
+  - Linux distributions with glibc>=2.28 (released in August 2018):
+    - Arch Linux (minimum version 2018-08-02)
+    - Debian (minimum version 10.0)
+    - Fedora (minimum version 29)
+    - Linux Mint (minimum version 20)
+    - Rocky Linux / Alma Linux / RHEL (minimum version 8)
+    - Ubuntu (minimum version 20.04)
+  - Windows 11 with WSL2
+- **CUDA & NVIDIA Driver Combinations**:
+  - CUDA 12.0 with Driver 525.60.13+
+  - CUDA 12.2 with Driver 535.86.10+
+  - CUDA 12.5 with Driver 555.42.06+
+  - CUDA 12.9 with Driver 570.42.01+
+  - CUDA 13.0 with Driver 580.65.06+
+
+#### Recommended Requirements for Best Performance
+
+- **System Architecture**:
+  - x86-64
+  - ARM64
+- **GPU**:
+  - NVIDIA H100 SXM (compute capability >= 9.0) and above
+- **CPU**:
+  - 32+ cores
+- **System Memory**:
+  - 64+ GB RAM
+- **NVMe SSD Storage**:
+  - 100+ GB free space
+- **CUDA**:
+  - 13.0
+- **NVIDIA Drivers**:
+  - Latest NVIDIA drivers (580.65.06+)
+- **OS**:
+  - Linux distributions with glibc>=2.28 (released in August 2018):
+    - Arch Linux (minimum version 2018-08-02)
+    - Debian (minimum version 10.0)
+    - Fedora (minimum version 29)
+    - Linux Mint (minimum version 20)
+    - Rocky Linux / Alma Linux / RHEL (minimum version 8)
+
+The above configuration will provide optimal performance for large-scale optimization problems.
+
+#### Container Requirements
+
+- **nvidia-container-toolkit** needs to be installed for Docker deployment
 
 ### Installation on PyTorch Container
 
@@ -54,17 +121,17 @@ python -m venv .venv
 source .venv/bin/activate
 
 # Install cuFOLIO with all dependencies
-pip install -e .
+pip install .
 
 # Optional: Install development tools
-pip install -e ".[dev]"
+pip install ".[dev]"
 ```
 
 **Note:** The PyTorch container already includes CUDA and other GPU dependencies. This installation adds the optimization and ML libraries (cuOpt, cuML).
 
 ### Quick Start
 
-Explore the example notebooks in the `deploy/` directory:
+Explore the example notebooks in the [`notebooks/`](notebooks/) directory:
 - **`cvar_basic.ipynb`**: Complete walkthrough of Mean-CVaR portfolio optimization with GPU acceleration
 - **`efficient_frontier.ipynb`**: A quick tutorial on how to generate efficient frontier.
 - **`rebalancing_strategies.ipynb`** Introduction to dynamic re-balancing and examples of testing strategies
