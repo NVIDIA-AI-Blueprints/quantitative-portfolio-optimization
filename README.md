@@ -34,10 +34,8 @@ Portfolio Management (PM) is crucial for all investment-focused institutions, in
 ## Get Started
 
 ### System Requirements
-
-This project uses NVIDIA cuOpt and requires the same system specifications. For complete details, see the [cuOpt System Requirements](https://docs.nvidia.com/cuopt/user-guide/latest/system-requirements.html).
-
-#### Minimum Requirements
+<details>
+<summary><b>Minimum Requirements</b></summary>
 
 - **System Architecture**:
   - x86-64
@@ -73,7 +71,10 @@ This project uses NVIDIA cuOpt and requires the same system specifications. For 
   - CUDA 12.9 with Driver 570.42.01+
   - CUDA 13.0 with Driver 580.65.06+
 
-#### Recommended Requirements for Best Performance
+</details>
+
+<details>
+<summary><b>Recommended Requirements for Best Performance</b></summary>
 
 - **System Architecture**:
   - x86-64
@@ -100,27 +101,32 @@ This project uses NVIDIA cuOpt and requires the same system specifications. For 
 
 The above configuration will provide optimal performance for large-scale optimization problems.
 
-#### Container Requirements
+</details>
+
+<details>
+<summary><b>Container Requirements</b></summary>
 
 - **nvidia-container-toolkit** needs to be installed for Docker deployment
 
+</details>
+
 ### Installation on PyTorch Container
 
-To install cuFOLIO dependencies on the NVIDIA PyTorch container:
+To install dependencies on the NVIDIA PyTorch container:
 
 ```bash
 # Start the container
 docker run --gpus all -it --rm nvcr.io/nvidia/pytorch:25.08-py3
 
 # Clone the repository
-git clone https://github.com/NVIDIA-AI-Blueprints/portfolio-optimization.git
-cd portfolio-optimization
+git clone https://github.com/NVIDIA-AI-Blueprints/quantitative-portfolio-optimization.git
+cd quantitative-portfolio-optimization
 
 # Create and activate virtual environment
 python -m venv .venv
 source .venv/bin/activate
 
-# Install cuFOLIO with all dependencies
+# Install with all dependencies
 pip install .
 
 # Optional: Install development tools
@@ -147,8 +153,8 @@ We welcome contributions to this project! Please see [CONTRIBUTING.md](CONTRIBUT
 ## Community
 
 For questions, discussions, and community support:
-- **Issues**: Report bugs and request features via [GitHub Issues](https://github.com/NVIDIA-AI-Blueprints/portfolio-optimization/issues)
-- **Discussions**: Join conversations in [GitHub Discussions](https://github.com/NVIDIA-AI-Blueprints/portfolio-optimization/discussions)
+- **Issues**: Report bugs and request features via [GitHub Issues](https://github.com/NVIDIA-AI-Blueprints/quantitative-portfolio-optimization/issues)
+- **Discussions**: Join conversations in [GitHub Discussions](https://github.com/NVIDIA-AI-Blueprints/quantitative-portfolio-optimization/discussions)
 
 ## References
 
