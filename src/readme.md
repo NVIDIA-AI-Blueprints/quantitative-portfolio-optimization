@@ -1,6 +1,6 @@
 # GPU-Accelerated Portfolio Optimization
 
-The NVIDIA GPU-Accelerated Portfolio Optimization Developer Example uses NVIDIA cuOpt and CUDA-X data science libraries to transform portfolio optimization from a slow, batch process into a fast, iterative workflow.  GPU-accelerated portfolio optimization pipeline enables scalable strategy backtesting and interactive analysis.
+The NVIDIA Quantitative Portfolio Optimization developer example uses NVIDIA cuOpt and CUDA-X data science libraries to transform portfolio optimization from a slow, batch process into a fast, iterative workflow.  GPU-accelerated portfolio optimization pipeline enables scalable strategy backtesting and interactive analysis.
 
 ## Overview
 
@@ -209,5 +209,5 @@ results = rebalancer.rebalance()
 
 ## References
 
-For detailed API documentation and advanced usage examples, refer to the deployment notebooks in the `deploy/` directory.
+For detailed API documentation and advanced usage examples, refer to the jupyter notebooks in the [`notebooks/`](../notebooks/) directory.
 
