@@ -266,7 +266,7 @@ def optimize_market_regimes(
             solver_obj = settings["solver"]
             return str(solver_obj).replace("cp.", "").replace("solvers.", "")
         elif "api" in settings and settings["api"] == "cuopt_python":
-            return "CUOPT"
+            return "cuOpt"
         else:
             return "UNKNOWN"
 
@@ -286,7 +286,7 @@ def optimize_market_regimes(
             ]
         )
 
-    result_dataframe = pd.DataFrame(columns=columns)
+    result_rows = []
 
     for regime_name, regime_range in all_regimes.items():
         print("=" * 70)
@@ -367,14 +367,15 @@ def optimize_market_regimes(
                 result_row[f"{solver_name}-CVaR"] = None
                 result_row[f"{solver_name}-optimal_portfolio"] = None
 
-        # Add this regime's results to dataframe
-        result_dataframe = pd.concat(
-            [result_dataframe, pd.DataFrame([result_row])], ignore_index=True
-        )
+        # Add this regime's results to list
+        result_rows.append(result_row)
 
     print("\n" + "=" * 70)
     print("Optimization Complete!")
     print("=" * 70)
+
+    # Create DataFrame from collected rows
+    result_dataframe = pd.DataFrame(result_rows, columns=columns)
 
     if results_csv_file_name:
         result_dataframe.to_csv(results_csv_file_name, index=False)

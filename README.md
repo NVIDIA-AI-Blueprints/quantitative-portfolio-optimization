@@ -131,9 +131,36 @@ pip install .
 
 # Optional: Install development tools
 pip install ".[dev]"
+
+# Install Jupyter and create kernel
+pip install jupyter jupyterlab ipykernel
+
+# Create a Jupyter kernel for this environment
+python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
+
+# Launch Jupyter Lab
+jupyter lab
 ```
 
 **Note:** The PyTorch container already includes CUDA and other GPU dependencies. This installation adds the optimization and ML libraries (cuOpt, cuML).
+
+#### Using the Jupyter Kernel
+
+After launching Jupyter Lab:
+1. Navigate to the [`notebooks/`](notebooks/) directory
+2. Open any notebook (e.g., `cvar_basic.ipynb`)
+3. Select the "Portfolio Optimization" kernel from the kernel selector in the top-right corner
+4. If the kernel is not visible, refresh the page or restart Jupyter Lab
+
+To list all available kernels:
+```bash
+jupyter kernelspec list
+```
+
+To remove the kernel later (if needed):
+```bash
+jupyter kernelspec uninstall portfolio-opt
+```
 
 ### Quick Start
 

@@ -422,8 +422,8 @@ def compare_results(gpu_results, cpu_results):
     # Collect all available results
     solvers = []
     if gpu_results is not None:
-        # Determine GPU solver name based on results structure or default to CUOPT
-        gpu_name = "CUOPT (CVXPY)"  # Default name for GPU results
+        # Determine GPU solver name based on results structure or default to cuOpt
+        gpu_name = "cuOpt (CVXPY)"  # Default name for GPU results
         solvers.append((gpu_name, gpu_results))
     if cpu_results is not None:
         solvers.append(("CPU (HIGHS)", cpu_results))
