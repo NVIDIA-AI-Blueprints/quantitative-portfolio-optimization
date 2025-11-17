@@ -162,6 +162,42 @@ To remove the kernel later (if needed):
 jupyter kernelspec uninstall portfolio-opt
 ```
 
+### Setting Up Data with Git LFS
+
+This project uses Git Large File Storage (LFS) to manage large data files, including `sp500.csv` stored in the `data/` directory.
+
+#### Installing Git LFS
+
+If you don't have Git LFS installed, follow these steps:
+
+**On Ubuntu/Debian:**
+```bash
+sudo apt-get install git-lfs
+```
+
+**On Fedora/RHEL:**
+```bash
+sudo dnf install git-lfs
+```
+
+**For other systems**, visit the [Git LFS website](https://git-lfs.github.com/) for installation instructions.
+
+#### Pulling LFS Files
+
+After installing Git LFS, initialize it and pull the data files:
+
+```bash
+# Initialize Git LFS (one-time setup)
+git lfs install
+
+# Pull all LFS files (including sp500.csv)
+git lfs pull
+```
+
+The `sp500.csv` file will be downloaded to the `data/` directory and is ready to use in the notebooks.
+
+**Note:** If you cloned the repository before installing Git LFS, you'll need to run `git lfs pull` to fetch the actual data files. Otherwise, you'll only have pointer files instead of the actual data.
+
 ### Quick Start
 
 Explore the example notebooks in the [`notebooks/`](notebooks/) directory:
