@@ -705,7 +705,7 @@ class rebalance_portfolio:
             Line2D(
                 [0],
                 [0],
-                color=colors["benchmark"][1],
+                color=colors["benchmark"][0],
                 linewidth=2.5,
                 label="Buy & Hold",
             ),

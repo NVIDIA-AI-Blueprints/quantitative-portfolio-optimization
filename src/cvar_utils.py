@@ -106,7 +106,6 @@ def generate_samples_kde(
         >>> print(new_scenarios.shape)  # (50, 3)
     """
     if device == "CPU":
-
         kde = sklearn.neighbors.KernelDensity(kernel=kernel, bandwidth=bandwidth).fit(
             returns_data
         )
@@ -638,7 +637,6 @@ def generate_user_input_portfolios(
         )
 
     for portfolio_name, portfolio_tuple in portfolios_dict.items():
-
         weights_dict, cash = portfolio_tuple
         portfolio = Portfolio(
             tickers=returns_dict["tickers"], time_range=returns_dict["regime"]["range"]
@@ -771,8 +769,8 @@ def create_efficient_frontier(
         figsize (tuple, optional): Figure size (width, height). Defaults to (12, 8).
         style (str, optional): Plot style ("publication", "presentation", "minimal").
             Defaults to "publication".
-        color_scheme (str, optional): Color scheme ("modern", "classic", "vibrant").
-            Defaults to "modern".
+        color_scheme (str, optional): Color scheme ("modern" and more to come).
+            If not specified, "modern" is used.
         ra_num (int, optional): Number of risk aversion levels. Defaults to 25.
         min_risk_aversion (float, optional): Minimum risk aversion (log scale).
             Defaults to -3.
@@ -826,32 +824,20 @@ def create_efficient_frontier(
     # Color schemes
     color_schemes = {
         "modern": {
-            "frontier": "#2E86AB",
-            "benchmark": ["#A23B72", "#F18F01", "#C73E1D"],
-            "assets": "#7209B7",
-            "custom": "#F72585",
-            "background": "#FAFAFA",
+            "frontier": "#7cd7fe",
+            "benchmark": [
+                "#fcde7b",
+                "#ff8181",
+                "#0d8473",
+            ],  # NVIDIA yellow, red, dark teal
+            "assets": "#c359ef",
+            "custom": "#fc79ca",
+            "background": "#FFFFFF",
             "grid": "#E0E0E0",
-        },
-        "classic": {
-            "frontier": "#1f77b4",
-            "benchmark": ["#ff7f0e", "#2ca02c", "#d62728"],
-            "assets": "#9467bd",
-            "custom": "#e377c2",
-            "background": "white",
-            "grid": "#E8E8E8",
-        },
-        "vibrant": {
-            "frontier": "#FF6B35",
-            "benchmark": ["#F7931E", "#FFD23F", "#06FFA5"],
-            "assets": "#B6244F",
-            "custom": "#7209B7",
-            "background": "#FFFEF7",
-            "grid": "#E5E5E5",
         },
     }
 
-    colors = color_schemes.get(color_scheme, color_schemes["modern"])
+    colors = color_schemes[color_scheme]
 
     # Set style
     if style == "publication":
@@ -1753,9 +1739,7 @@ def _print_comparison_results(results):
         if cuopt["objective_value"] is not None
         else "N/A"
     )
-    print(
-        f"{'Objective Value':<25} CVXPY: {cvxpy_obj_str:<15} " f"cuOpt: {cuopt_obj_str}"
-    )
+    print(f"{'Objective Value':<25} CVXPY: {cvxpy_obj_str:<15} cuOpt: {cuopt_obj_str}")
 
     # Handle differences that might be infinite
     if comp["objective_diff"] == float("inf"):
