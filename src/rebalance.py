@@ -565,11 +565,11 @@ class rebalance_portfolio:
         # Use the same styling as efficient frontier
         color_schemes = {
             "modern": {
-                "frontier": "#88CEE6",
-                "benchmark": ["#F6C8A8", "#F18F01", "#C73E1D"],
-                "assets": "#7209B7",
-                "custom": "#F72585",
-                "background": "#FAFAFA",
+                "frontier": "#7cd7fe",
+                "benchmark": ["#fcde7b", "#ff8181", "#0d8473"], #NVIDIA yellow, red, dark teal
+                "assets": "#c359ef",
+                "custom": "#fc79ca",
+                "background": "#FFFFFF",
                 "grid": "#E0E0E0",
             }
         }
