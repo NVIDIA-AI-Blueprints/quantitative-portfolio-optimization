@@ -351,32 +351,13 @@ class Portfolio:
         # Color schemes consistent with rebalance plot
         color_schemes = {
             "modern": {
-                "long": "#88CEE6",  # Light blue (frontier)
-                "short": "#F72585",  # Pink/Red (custom)
-                "cash": "#7209B7",  # Purple (assets)
-                "other": "#F6C8A8",  # Light orange (benchmark)
-                "background": "#FAFAFA",
+                "long": "#7cd7fe",  # Light blue (frontier)
+                "short": "#ff8181",  # Pink/Red (custom)
+                "cash": "#fcde7b",  # Purple (assets)
+                "background": "#ffffff",
                 "grid": "#E0E0E0",
-                "text": "#2F2F2F",
-            },
-            "classic": {
-                "long": "#1f77b4",
-                "short": "#d62728",
-                "cash": "#2ca02c",
-                "other": "#ff7f0e",
-                "background": "white",
-                "grid": "#CCCCCC",
-                "text": "black",
-            },
-            "minimal": {
-                "long": "#4A90A4",
-                "short": "#C73E1D",
-                "cash": "#8FA68E",
-                "other": "#D3D3D3",
-                "background": "white",
-                "grid": "#F0F0F0",
-                "text": "#333333",
-            },
+                "text": "#000000",
+            }
         }
 
         colors = color_schemes.get(style, color_schemes["modern"])
@@ -430,7 +411,7 @@ class Portfolio:
 
             # Create blue gradient colormap
             long_cmap = mcolors.LinearSegmentedColormap.from_list(
-                "long_gradient", ["#B8E0F5", "#1F5F8B"], N=100
+                "long_gradient", ["#7cd7fe", "#0046a4"], N=100
             )
 
         # For short positions: gradient from light to dark red
@@ -445,7 +426,7 @@ class Portfolio:
 
             # Create red gradient colormap
             short_cmap = mcolors.LinearSegmentedColormap.from_list(
-                "short_gradient", ["#FFB3BA", "#8B0000"], N=100
+                "short_gradient", ["#ff8181", "#961515"], N=100
             )
 
         # Add long positions with gradient colors
@@ -478,7 +459,7 @@ class Portfolio:
         if abs(cash) > cutoff:
             all_tickers.append("CASH")
             all_weights.append(cash)
-            all_colors.append("#FFD700")  # Gold/Yellow color for cash
+            all_colors.append(colors["cash"])  # Gold/Yellow color for cash
 
         # Create horizontal bar chart with extra space before cash
         cash_gap = 0.8  # Extra space between equity positions and cash
