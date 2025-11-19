@@ -63,7 +63,7 @@ def calculate_returns(
         dict_keys(['mean', 'covariance', 'returns', 'cvar_data', ...])
     """
     returns_dict = utils.calculate_returns(file_name, regime_dict, return_type)
-    cvar_returns_dict = generate_CVaR_data(returns_dict, cvar_params, device="CPU")
+    cvar_returns_dict = generate_CVaR_data(returns_dict, cvar_params, device=device)
 
     return cvar_returns_dict
 
@@ -109,6 +109,7 @@ def generate_samples_kde(
         kde = sklearn.neighbors.KernelDensity(kernel=kernel, bandwidth=bandwidth).fit(
             returns_data
         )
+        new_samples = kde.sample(num_scen)
 
     elif device == "GPU":
         # Lazy import to avoid loading CUDA libraries on module import
@@ -117,10 +118,10 @@ def generate_samples_kde(
         kde = cuml.neighbors.KernelDensity(kernel=kernel, bandwidth=bandwidth).fit(
             returns_data
         )
+        new_samples = kde.sample(num_scen).get()  # convert to numpy array
 
     else:
         raise ValueError("Invalid Device: CPU or GPU!")
-    new_samples = kde.sample(num_scen)
 
     return new_samples
 
