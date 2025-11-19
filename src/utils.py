@@ -17,6 +17,7 @@
 
 import os
 
+from typing import Optional, Union
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -42,48 +43,57 @@ def get_input_data(filepath):
     return df
 
 
-def calculate_returns(input_file_name, regime_dict, return_type="LOG"):
+def calculate_returns(
+    input_dataset: Union[pd.DataFrame, str],
+    regime_dict: dict,
+    return_type: str = "LOG",
+    freq: int = 1,
+):
     """
     preprocess the dat from a particular period of time.
     Assuming the returns are log normally distributed, return the mean and
     covariance of the log returns and the log returns
 
     Parameters:
-    :input_file_name: directory of the input file
+    :input_dataset: pandas DataFrame or the path to the input dataset
+    :return_type: str, type of the returns. For example, "LOG" means log returns,
+            "PNL" means the dataset is already in the format of P&L data.
+            "NORMAL" means absolute returns.
     :regime_dict: dict of the format {'name': , 'range':(start, end)}
+    :freq: int, frequency of the returns. For example, freq = 1 means daily returns.
     """
     return_type = return_type.upper()
 
-    input_data = get_input_data(input_file_name)
+    if isinstance(input_dataset, str):
+        input_data = get_input_data(input_dataset)
+    else:
+        input_data = input_dataset
+
     regime_range = regime_dict["range"]
     if regime_range is None:
-        returns_data = input_data
+        input_data = input_data
     else:
         start, end = regime_range
-        returns_data = input_data.loc[start:end]
-    returns_data = returns_data.dropna(axis=1)
+        input_data = input_data.loc[start:end]
+    input_data = input_data.dropna(axis=1)
 
     if return_type == "LOG":
-        returns_dataframe = calculate_log_returns(returns_data)
-        # retrieve the mean and covariance of log returns
-        returns = returns_dataframe.to_numpy()
-        m = np.mean(returns, axis=0)
-        cov = np.cov(returns.transpose())
-
+        returns_data = calculate_log_returns(input_data, freq)
     elif return_type == "PNL":
-        returns_dataframe = returns_data
-        # retrieve the mean and covariance of returns
-        returns = returns_dataframe.to_numpy()
-        m = np.mean(returns, axis=0)
-        _ = np.cov(returns.transpose())  # covariance calculation (unused)
-
+        returns_data = input_data
+    elif return_type == "NORMAL":
+        returns_data = compute_abs_returns(input_data, freq)
     else:
         raise NotImplementedError("Invalid return type!")
 
-    dates = returns_dataframe.index
+    returns_array = returns_data.to_numpy()
+    m = np.mean(returns_array, axis=0)
+    cov = np.cov(returns_array.transpose())
+
+    dates = returns_data.index
     returns_dict = {
         "return_type": return_type,
-        "returns": returns_dataframe,
+        "returns": returns_array,
         "regime": regime_dict,
         "dates": dates,
         "mean": m,
@@ -94,24 +104,25 @@ def calculate_returns(input_file_name, regime_dict, return_type="LOG"):
     return returns_dict
 
 
-def calculate_log_returns(price_data):
-    """compute the daily log returns given a price dataframe"""
+def calculate_log_returns(price_data, freq=1):
+    """compute the log returns given a price dataframe"""
     # compute the log returns
-    returns_dataframe = price_data.apply(np.log) - price_data.shift(1).apply(np.log)
+    returns_dataframe = price_data.apply(np.log) - price_data.shift(freq).apply(np.log)
     returns_dataframe = returns_dataframe.dropna(how="all")
     returns_dataframe = returns_dataframe.fillna(0)
 
     return returns_dataframe
 
 
-def create_save_path(folder, save_name):
+def compute_abs_returns(price_data, freq=1):
     """
-    Helper function to create the save path if not exist
+    compute the absolute returns using freq. For example, freq = 1 means today - yesterday.
     """
-    os.makedirs(folder, exist_ok=True)  # Create the directory if it doesn't exist
-    save_path = os.path.join(folder, save_name)
+    returns_dataframe = price_data.diff(freq)
+    returns_dataframe = returns_dataframe.dropna(how="all")
+    returns_dataframe = returns_dataframe.fillna(0)
 
-    return save_path
+    return returns_dataframe
 
 
 def plot_efficient_frontier(
@@ -287,7 +298,6 @@ def plot_efficient_frontier(
     else:
         plt.title(title, fontsize=11, pad=15)
     if EF_plot_png_name:
-
         plt.savefig(EF_plot_png_name)
     if show_plot:
         plt.show()

@@ -15,6 +15,7 @@
 
 import os
 
+from typing import Union
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -31,7 +32,7 @@ from .portfolio import Portfolio
 
 
 def calculate_returns(
-    file_name: str,
+    input_dataset: Union[pd.DataFrame, str],
     regime_dict: dict,
     return_type: str,
     cvar_params: CvarParameters,
@@ -40,7 +41,7 @@ def calculate_returns(
     """Create data for CVaR optimizer.
 
     Args:
-        file_name (str): Path to the input data file.
+        input_dataset (Union[pd.DataFrame, str]): pandas DataFrame or path to the input dataset.
         regime_dict (dict): Dictionary containing regime information.
         return_type (str): Type of returns to calculate.
         cvar_params (CvarParameters): CVaR optimization parameters.
@@ -62,7 +63,7 @@ def calculate_returns(
         >>> print(returns_dict.keys())
         dict_keys(['mean', 'covariance', 'returns', 'cvar_data', ...])
     """
-    returns_dict = utils.calculate_returns(file_name, regime_dict, return_type)
+    returns_dict = utils.calculate_returns(input_dataset, regime_dict, return_type)
     cvar_returns_dict = generate_CVaR_data(returns_dict, cvar_params, device=device)
 
     return cvar_returns_dict
