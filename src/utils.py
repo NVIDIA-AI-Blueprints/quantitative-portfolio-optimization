@@ -78,24 +78,23 @@ def calculate_returns(
     input_data = input_data.dropna(axis=1)
 
     if return_type == "LOG":
-        returns_data = calculate_log_returns(input_data, freq)
+        returns_dataframe = calculate_log_returns(input_data, freq)
     elif return_type == "PNL":
-        returns_data = input_data
+        returns_dataframe = input_data
     elif return_type == "NORMAL":
-        returns_data = compute_abs_returns(input_data, freq)
+        returns_dataframe = compute_abs_returns(input_data, freq)
     else:
         raise NotImplementedError("Invalid return type!")
 
-    returns_array = returns_data.to_numpy()
+    returns_array = returns_dataframe.to_numpy()
     m = np.mean(returns_array, axis=0)
     cov = np.cov(returns_array.transpose())
 
-    dates = returns_data.index
     returns_dict = {
         "return_type": return_type,
-        "returns": returns_array,
+        "returns": returns_dataframe,
         "regime": regime_dict,
-        "dates": dates,
+        "dates": returns_dataframe.index,
         "mean": m,
         "covariance": cov,
         "tickers": list(input_data.columns),
