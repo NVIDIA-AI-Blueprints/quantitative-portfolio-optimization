@@ -566,7 +566,7 @@ class rebalance_portfolio:
         color_schemes = {
             "modern": {
                 "frontier": "#7cd7fe",
-                "benchmark": ["#fcde7b", "#ff8181", "#0d8473"], #NVIDIA yellow, red, dark teal
+                "benchmark": ["#ef9100", "#ff8181", "#0d8473"], #NVIDIA orange, red, dark teal
                 "assets": "#c359ef",
                 "custom": "#fc79ca",
                 "background": "#FFFFFF",
@@ -597,7 +597,7 @@ class rebalance_portfolio:
             self.buy_and_hold_cumulative_portfolio_value.index,
             self.buy_and_hold_cumulative_portfolio_value.values,
             linewidth=2.5,
-            color=colors["benchmark"][1],
+            color=colors["benchmark"][0],
             linestyle="-",
             label="Buy & Hold",
             zorder=2,

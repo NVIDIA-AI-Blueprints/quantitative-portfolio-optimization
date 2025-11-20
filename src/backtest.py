@@ -305,11 +305,11 @@ class portfolio_backtester:
         backtest_results.set_index("portfolio name", inplace=True)
         if plot_returns:
             colors = {
-                "frontier": "#7cd7fe",
-                "benchmark": ["#fcde7b", "#ff8181", "#0d8473"], #NVIDIA yellow, red, dark teal
-                "assets": "#c359ef",
-                "custom": "#fc79ca",
-                "background": "#FFFFFF",
+                "frontier": "#88CEE6",
+                "benchmark": ["#F6C8A8", "#F18F01", "#C73E1D"],
+                "assets": "#7209B7",
+                "custom": "#F72585",
+                "background": "#FAFAFA",
                 "grid": "#E0E0E0",
             }
 
@@ -344,7 +344,7 @@ class portfolio_backtester:
                 elif "equal-weight" in ptf_name.lower():
                     # Equal-weight benchmark gets same color as buy & hold
                     # in rebalance.py
-                    color = colors["benchmark"][0]
+                    color = colors["benchmark"][1]
                     linewidth = 2
                     alpha = 0.8
                     zorder = 2
@@ -413,7 +413,7 @@ class portfolio_backtester:
                 cut_off_date = pd.to_datetime(cut_off_date)
                 ax.axvline(
                     x=cut_off_date,
-                    color="#a7a7a7",
+                    color="lightgray",
                     linestyle="--",
                     linewidth=1.5,
                     alpha=0.6,
