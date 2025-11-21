@@ -42,7 +42,6 @@ class CvarParameters:
     risk_aversion: float = 1  # λ – penalty applied to CVaR inside objective
     confidence: float = 0.95  # α in CVaR_α (e.g. 0.95 -> 95 % CVaR)
     num_scen: int = 100  # Number of return scenarios to generate
-    fit_type: str = "kde"  # Scenario generation method
     # Soft / hard constraint targets
     L_tar: float = 1.6  # Leverage constraint (Σ|wᵢ|)
     T_tar: Optional[float] = None  # Turnover constraint

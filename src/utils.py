@@ -46,8 +46,7 @@ def get_input_data(filepath):
 def calculate_returns(
     input_dataset: Union[pd.DataFrame, str],
     regime_dict: dict,
-    return_type: str = "LOG",
-    freq: int = 1,
+    returns_compute_settings: dict,
 ):
     """
     preprocess the dat from a particular period of time.
@@ -62,7 +61,8 @@ def calculate_returns(
     :regime_dict: dict of the format {'name': , 'range':(start, end)}
     :freq: int, frequency of the returns. For example, freq = 1 means daily returns.
     """
-    return_type = return_type.upper()
+    return_type = returns_compute_settings["return_type"].upper()
+    freq = returns_compute_settings["freq"]
 
     if isinstance(input_dataset, str):
         input_data = get_input_data(input_dataset)

@@ -14,8 +14,9 @@
 # limitations under the License.
 
 import os
-
+import time
 from typing import Union
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -34,9 +35,7 @@ from .portfolio import Portfolio
 def calculate_returns(
     input_dataset: Union[pd.DataFrame, str],
     regime_dict: dict,
-    return_type: str,
-    cvar_params: CvarParameters,
-    device: str = "CPU",
+    returns_compute_settings: Union[dict, str],
 ):
     """Create data for CVaR optimizer.
 
@@ -45,46 +44,60 @@ def calculate_returns(
         regime_dict (dict): Dictionary containing regime information.
         return_type (str): Type of returns to calculate.
         cvar_params (CvarParameters): CVaR optimization parameters.
-        device (str, optional): Device to use for computation. Defaults to "CPU".
+        returns_compute_settings (Union[dict, str]): Dictionary containing returns calculation settings or the return type.
+            If a dictionary is provided, it contains the following keys:
+            - "return_type": Type of returns to calculate.
+            - "freq": Frequency of the returns.
+            - "returns_compute_device": Device to use for returns calculation.
+            If a string is provided, it is the return type.
 
     Returns:
         dict: Dictionary containing CVaR data for optimization.
 
     Example:
         >>> regime = {"name": "bull_market", "range": ("2020-01-01", "2021-12-31")}
-        >>> cvar_params = CvarParameters(num_scen=100, fit_type="gaussian")
+        >>> returns_compute_settings = {"return_type": "LOG", "freq": 1, "returns_compute_device": "CPU", "verbose": False}
         >>> returns_dict = calculate_returns(
         ...     "data/stock_data/sp500.csv",
         ...     regime,
         ...     "LOG",
         ...     cvar_params,
-        ...     device="CPU"
+        ...     returns_compute_settings
         ... )
         >>> print(returns_dict.keys())
-        dict_keys(['mean', 'covariance', 'returns', 'cvar_data', ...])
+        dict_keys(['return_type', 'returns', 'regime', 'dates', 'mean', 'covariance', 'tickers'])
     """
-    returns_dict = utils.calculate_returns(input_dataset, regime_dict, return_type)
-    cvar_returns_dict = generate_CVaR_data(returns_dict, cvar_params, device=device)
+    # set the default values for the returns calculation settings
+    if isinstance(returns_compute_settings, str):
+        returns_compute_settings = {
+            "return_type": returns_compute_settings,
+            "freq": 1,
+            "returns_compute_device": "CPU",
+            "verbose": False,
+        }
+    elif isinstance(returns_compute_settings, dict):
+        returns_compute_settings = returns_compute_settings
 
-    return cvar_returns_dict
+    returns_dict = utils.calculate_returns(
+        input_dataset, regime_dict, returns_compute_settings
+    )
+
+    return returns_dict
 
 
 def generate_samples_kde(
     num_scen: int,
     returns_data: np.ndarray,
-    bandwidth: float = 0.05,
-    kernel: str = "gaussian",
-    device: str = "CPU",
+    kde_settings: dict = None,
+    verbose: bool = False,
 ):
     """Fit KernelDensity to data and return new samples.
 
     Args:
         num_scen (int): Number of scenarios to generate.
         returns_data (np.ndarray): Historical returns data for fitting.
-        bandwidth (float, optional): Bandwidth of the Kernel Density estimator.
-            Defaults to 0.05.
-        kernel (str, optional): Kernel type for the estimator. Defaults to "gaussian".
-        device (str, optional): Device to use ("CPU" or "GPU"). Defaults to "CPU".
+        kde_settings (dict, optional): Dictionary containing KDE settings. Defaults to None.
+        verbose (bool, optional): Whether to print verbose output. Defaults to False.
 
     Returns:
         np.ndarray: Array of generated samples with shape (num_scen, n_features).
@@ -106,13 +119,19 @@ def generate_samples_kde(
         ... )
         >>> print(new_scenarios.shape)  # (50, 3)
     """
-    if device == "CPU":
+    kde_device = kde_settings["device"]
+    bandwidth = kde_settings["bandwidth"]
+    kernel = kde_settings["kernel"]
+
+    if kde_device == "CPU":
         kde = sklearn.neighbors.KernelDensity(kernel=kernel, bandwidth=bandwidth).fit(
             returns_data
         )
         new_samples = kde.sample(num_scen)
+        if verbose:
+            print("KDE fitting on CPU")
 
-    elif device == "GPU":
+    elif kde_device == "GPU":
         # Lazy import to avoid loading CUDA libraries on module import
         import cuml.neighbors
 
@@ -120,6 +139,8 @@ def generate_samples_kde(
             returns_data
         )
         new_samples = kde.sample(num_scen).get()  # convert to numpy array
+        if verbose:
+            print("KDE fitting on GPU")
 
     else:
         raise ValueError("Invalid Device: CPU or GPU!")
@@ -127,9 +148,7 @@ def generate_samples_kde(
     return new_samples
 
 
-def generate_CVaR_data(
-    returns_dict: dict, cvar_params: CvarParameters, device: str = "CPU"
-):
+def generate_CVaR_data(returns_dict: dict, scenario_generation_settings: dict):
     """Generate CVaR_data dataclass for CVaR optimization.
 
     This function creates the CvarData dataclass containing scenarios and probabilities
@@ -138,9 +157,8 @@ def generate_CVaR_data(
     Args:
         returns_dict (dict): Dictionary containing returns data with mean,
             covariance, and returns.
-        cvar_params (CvarParameters): CVaR optimization parameters including
+        scenario_generation_settings (dict): Dictionary containing scenario generation settings including
             fit_type and num_scen.
-        device (str, optional): Device to use for KDE fitting. Defaults to "CPU".
 
     Returns:
         dict: Updated returns_dict with added 'cvar_data' containing
@@ -157,26 +175,35 @@ def generate_CVaR_data(
         ...     "covariance": np.eye(3) * 0.01,
         ...     "returns": np.random.randn(100, 3) * 0.02
         ... }
-        >>> cvar_params = CvarParameters(num_scen=50, fit_type="gaussian")
-        >>> result = generate_CVaR_data(returns_dict, cvar_params)
+        >>> scenario_generation_settings = {"num_scen": 50, "fit_type": "gaussian"}
+        >>> result = generate_CVaR_data(returns_dict, scenario_generation_settings)
         >>> print(type(result["cvar_data"]))
         <class 'cufolio.cvar_data.CvarData'>
         >>> print(result["cvar_data"].R.shape)  # (3, 50)
     """
+
     return_mean = returns_dict["mean"]
-    covariance = returns_dict["covariance"]
-    returns_data = returns_dict["returns"]
-    num_scen = cvar_params.num_scen
-    fit_type = cvar_params.fit_type
+    returns_data = returns_dict["returns"].to_numpy()
+    num_scen = scenario_generation_settings["num_scen"]
+    fit_type = scenario_generation_settings["fit_type"]
+
+    if "kde_settings" in scenario_generation_settings:
+        kde_settings = scenario_generation_settings["kde_settings"]
+    else:
+        kde_settings = {"device": "CPU", "bandwidth": 0.05, "kernel": "gaussian"}
 
     if fit_type == "gaussian":  # Gaussian distribution
+        covariance = returns_dict["covariance"]
         R_log = np.random.multivariate_normal(return_mean, covariance, size=num_scen)
         R = np.transpose(R_log)
         p = np.ones(num_scen) / num_scen  # probability of each scenario
 
     elif fit_type == "kde":  # kde distribution
         R_log = generate_samples_kde(
-            num_scen, returns_data, bandwidth=0.005, kernel="gaussian", device=device
+            num_scen,
+            returns_data,
+            kde_settings=kde_settings,
+            verbose=scenario_generation_settings["verbose"],
         )
         R = np.transpose(R_log)
         p = np.ones(num_scen) / num_scen  # probability of each scenario
@@ -185,7 +212,7 @@ def generate_CVaR_data(
         R = np.transpose(returns_data)
         num_scen = R.shape[1]
         p = np.ones(num_scen) / num_scen
-        cvar_params.update_num_scen(num_scen)
+
     else:
         raise ValueError("Unsupported fit type: must be from gaussian, kde, or no_fit.")
 
@@ -198,7 +225,8 @@ def generate_CVaR_data(
 
 def optimize_market_regimes(
     input_file_name: str,
-    return_type: str,
+    returns_compute_settings: dict,
+    scenario_generation_settings: dict,
     all_regimes: dict,
     cvar_params: CvarParameters,
     solver_settings_list: list[dict],
@@ -215,7 +243,8 @@ def optimize_market_regimes(
 
     Args:
         input_file_name (str): Path to input data file.
-        return_type (str): Type of returns to calculate (e.g., "LOG").
+        returns_compute_settings (dict): Dictionary containing returns calculation settings.
+        scenario_generation_settings (dict): Dictionary containing scenario generation settings.
         all_regimes (dict): Dictionary of regimes to test with format
             {'regime_name': regime_range}.
         cvar_params (CvarParameters): CVaR optimization parameters.
@@ -267,9 +296,9 @@ def optimize_market_regimes(
             solver_obj = settings["solver"]
             return str(solver_obj).replace("cp.", "").replace("solvers.", "")
         elif "api" in settings and settings["api"] == "cuopt_python":
-            return "cuOpt"
+            return "CUOPT"
         else:
-            return "UNKNOWN"
+            raise ValueError(f"Unsupported solver settings: {settings}")
 
     # Build column names dynamically based on solvers
     columns = ["regime"]
@@ -287,7 +316,7 @@ def optimize_market_regimes(
             ]
         )
 
-    result_rows = []
+    result_dataframe = pd.DataFrame(columns=columns)
 
     for regime_name, regime_range in all_regimes.items():
         print("=" * 70)
@@ -306,8 +335,9 @@ def optimize_market_regimes(
         # create the returns_dict for the current regime
         curr_regime = {"name": regime_name, "range": regime_range}
         returns_dict = calculate_returns(
-            input_data_directory, curr_regime, return_type, cvar_params
+            input_data_directory, curr_regime, returns_compute_settings
         )
+        returns_dict = generate_CVaR_data(returns_dict, scenario_generation_settings)
 
         # Initialize result row for this regime
         result_row = {"regime": regime_name}
@@ -357,6 +387,7 @@ def optimize_market_regimes(
                 print(
                     f"  ✓ {solver_name} - Objective: {result['obj']:.6f}, "
                     f"Time: {result['solve time']:.4f}s"
+                    f"--------------------------------"
                 )
 
             except Exception as e:
@@ -368,15 +399,15 @@ def optimize_market_regimes(
                 result_row[f"{solver_name}-CVaR"] = None
                 result_row[f"{solver_name}-optimal_portfolio"] = None
 
-        # Add this regime's results to list
-        result_rows.append(result_row)
+        # Add this regime's results to dataframe
+        result_dataframe = pd.concat(
+            [result_dataframe, pd.DataFrame([result_row])], ignore_index=True
+        )
 
     print("\n" + "=" * 70)
     print("Optimization Complete!")
     print("=" * 70)
-
-    # Create DataFrame from collected rows
-    result_dataframe = pd.DataFrame(result_rows, columns=columns)
+    print("\n")
 
     if results_csv_file_name:
         result_dataframe.to_csv(results_csv_file_name, index=False)
@@ -730,7 +761,7 @@ def evaluate_user_input_portfolios(
     return custom_portfolios
 
 
-def create_efficient_frontier(
+def create_beautiful_efficient_frontier(
     input_file_name: str,
     regime_dict: dict,
     return_type: str,
@@ -771,8 +802,8 @@ def create_efficient_frontier(
         figsize (tuple, optional): Figure size (width, height). Defaults to (12, 8).
         style (str, optional): Plot style ("publication", "presentation", "minimal").
             Defaults to "publication".
-        color_scheme (str, optional): Color scheme ("modern" and more to come).
-            If not specified, "modern" is used.
+        color_scheme (str, optional): Color scheme ("modern", "classic", "vibrant").
+            Defaults to "modern".
         ra_num (int, optional): Number of risk aversion levels. Defaults to 25.
         min_risk_aversion (float, optional): Minimum risk aversion (log scale).
             Defaults to -3.
@@ -801,7 +832,7 @@ def create_efficient_frontier(
 
     Example:
         >>> regime = {"name": "full_period", "range": ("2020-01-01", "2023-12-31")}
-        >>> results_df, fig, ax = create_efficient_frontier(
+        >>> results_df, fig, ax = create_beautiful_efficient_frontier(
         ...     "data/stock_data/sp500.csv",
         ...     regime,
         ...     "LOG",
@@ -826,20 +857,32 @@ def create_efficient_frontier(
     # Color schemes
     color_schemes = {
         "modern": {
-            "frontier": "#7cd7fe",
-            "benchmark": [
-                "#fcde7b",
-                "#ff8181",
-                "#0d8473",
-            ],  # NVIDIA yellow, red, dark teal
-            "assets": "#c359ef",
-            "custom": "#fc79ca",
-            "background": "#FFFFFF",
+            "frontier": "#2E86AB",
+            "benchmark": ["#A23B72", "#F18F01", "#C73E1D"],
+            "assets": "#7209B7",
+            "custom": "#F72585",
+            "background": "#FAFAFA",
             "grid": "#E0E0E0",
+        },
+        "classic": {
+            "frontier": "#1f77b4",
+            "benchmark": ["#ff7f0e", "#2ca02c", "#d62728"],
+            "assets": "#9467bd",
+            "custom": "#e377c2",
+            "background": "white",
+            "grid": "#E8E8E8",
+        },
+        "vibrant": {
+            "frontier": "#FF6B35",
+            "benchmark": ["#F7931E", "#FFD23F", "#06FFA5"],
+            "assets": "#B6244F",
+            "custom": "#7209B7",
+            "background": "#FFFEF7",
+            "grid": "#E5E5E5",
         },
     }
 
-    colors = color_schemes[color_scheme]
+    colors = color_schemes.get(color_scheme, color_schemes["modern"])
 
     # Set style
     if style == "publication":
