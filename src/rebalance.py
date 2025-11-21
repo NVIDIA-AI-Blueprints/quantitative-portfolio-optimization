@@ -60,6 +60,10 @@ class rebalance_portfolio:
     ----------
     dataset_directory : str
         Path to asset universe data.
+    returns_compute_settings : dict
+        Settings for computing returns.
+    scenario_generation_settings : dict
+        Settings for generating return scenarios.
     trading_start, trading_end : str
         Trading period boundaries in YYYY-MM-DD format.
     look_forward_window : int
@@ -72,8 +76,6 @@ class rebalance_portfolio:
         Solver configuration for optimization backend.
     re_optimize_criteria : dict
         Rebalancing trigger conditions with type and threshold.
-    return_type : str
-        Type of returns to use (LOG or LINEAR).
     print_opt_result : bool, default False
         Whether to print detailed optimization results.
     """
@@ -81,6 +83,8 @@ class rebalance_portfolio:
     def __init__(
         self,
         dataset_directory: str,
+        returns_compute_settings: dict,
+        scenario_generation_settings: dict,
         trading_start: str,
         trading_end: str,
         look_forward_window: int,
@@ -88,7 +92,6 @@ class rebalance_portfolio:
         cvar_params: cvar_parameters.CvarParameters,
         solver_settings: dict,
         re_optimize_criteria: dict,
-        return_type: str,
         print_opt_result: bool = False,
     ):
         """Initialize rebalancing portfolio with optimization parameters."""
@@ -101,23 +104,24 @@ class rebalance_portfolio:
 
         self.cvar_params = cvar_params
         self.solver_settings = solver_settings
-        self.return_type = return_type
+        self.returns_compute_settings = returns_compute_settings
+        self.scenario_generation_settings = scenario_generation_settings
         self.print_opt_result = print_opt_result
 
         self.re_optimize_criteria = re_optimize_criteria
         self.re_optimize_type = re_optimize_criteria["type"].lower()
         self.re_optimize_threshold = re_optimize_criteria["threshold"]
 
-        self._calculate_returns()
+        self._get_price_data()
 
-        self.dates_range = self.returns_data.loc[trading_start:trading_end].index
+        self.dates_range = self.price_data.loc[trading_start:trading_end].index
 
         (
             self.buy_and_hold_results,
             self.buy_and_hold_cumulative_portfolio_value,
         ) = self._get_buy_and_hold_results()
 
-    def _calculate_returns(self):
+    def _get_price_data(self):
         """Load price data and calculate returns based on specified return type."""
         self.price_data = pd.read_csv(
             self.dataset_directory, index_col=0, parse_dates=True
@@ -126,9 +130,6 @@ class rebalance_portfolio:
         assert (
             price_data_start >= self.price_data.index[0]
         ), "Invalid start date - choose a later date!"
-
-        if self.return_type == "LOG":
-            self.returns_data = utils.calculate_log_returns(self.price_data)
 
     def re_optimize(
         self,
@@ -241,11 +242,14 @@ class rebalance_portfolio:
                     ),
                 }
 
-                optimize_returns_dict = cvar_utils.calculate_returns(
-                    self.dataset_directory,
+                optimize_returns_dict = utils.calculate_returns(
+                    self.price_data,
                     optimize_regime,
-                    self.return_type,
-                    self.cvar_params,
+                    self.returns_compute_settings
+                )
+                optimize_returns_dict = cvar_utils.generate_cvar_data(
+                    optimize_returns_dict, 
+                    self.scenario_generation_settings
                 )
 
                 re_optimize_problem = cvar_optimizer.CVaR(
@@ -288,7 +292,7 @@ class rebalance_portfolio:
 
             # calculate returns
             test_returns_dict = utils.calculate_returns(
-                self.dataset_directory, backtest_regime, self.return_type
+                self.price_data, backtest_regime, self.returns_compute_settings
             )
 
             # run backtest

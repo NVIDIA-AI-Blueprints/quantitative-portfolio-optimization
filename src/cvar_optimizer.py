@@ -1043,7 +1043,7 @@ class CVaR(base_optimizer.BaseOptimizer):
         print(f"Solver:              {solver_name}")
         print(f"Regime:              {self.regime_name}")
         print(f"Time Period:         {self.regime_range[0]} to {self.regime_range[1]}")
-        print(f"Scenarios:           {self.params.num_scen:,}")
+        print(f"Scenarios:           {len(self.data.p):,}")
         print(f"Assets:              {self.n_assets}")
         print(f"Confidence Level:    {self.params.confidence:.1%}")
 

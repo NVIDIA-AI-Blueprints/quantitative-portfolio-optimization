@@ -41,7 +41,6 @@ class CvarParameters:
     # Risk model Parameters
     risk_aversion: float = 1  # λ – penalty applied to CVaR inside objective
     confidence: float = 0.95  # α in CVaR_α (e.g. 0.95 -> 95 % CVaR)
-    num_scen: int = 100  # Number of return scenarios to generate
     # Soft / hard constraint targets
     L_tar: float = 1.6  # Leverage constraint (Σ|wᵢ|)
     T_tar: Optional[float] = None  # Turnover constraint
@@ -100,12 +99,6 @@ class CvarParameters:
     def update_risk_aversion(self, new_risk_aversion: float):
         if new_risk_aversion >= 0:
             self.risk_aversion = new_risk_aversion
-        else:
-            raise ValueError("Invalid risk aversion")
-
-    def update_num_scen(self, new_num_scen: int):
-        if new_num_scen > 0:
-            self.num_scen = new_num_scen
         else:
             raise ValueError("Invalid risk aversion")
 

@@ -31,60 +31,6 @@ from .portfolio import Portfolio
 # Note: cvar_optimizer and cuml are imported lazily within functions to avoid
 # circular imports and loading CUDA libraries at module import time
 
-
-def calculate_returns(
-    input_dataset: Union[pd.DataFrame, str],
-    regime_dict: dict,
-    returns_compute_settings: Union[dict, str],
-):
-    """Create data for CVaR optimizer.
-
-    Args:
-        input_dataset (Union[pd.DataFrame, str]): pandas DataFrame or path to the input dataset.
-        regime_dict (dict): Dictionary containing regime information.
-        return_type (str): Type of returns to calculate.
-        cvar_params (CvarParameters): CVaR optimization parameters.
-        returns_compute_settings (Union[dict, str]): Dictionary containing returns calculation settings or the return type.
-            If a dictionary is provided, it contains the following keys:
-            - "return_type": Type of returns to calculate.
-            - "freq": Frequency of the returns.
-            - "returns_compute_device": Device to use for returns calculation.
-            If a string is provided, it is the return type.
-
-    Returns:
-        dict: Dictionary containing CVaR data for optimization.
-
-    Example:
-        >>> regime = {"name": "bull_market", "range": ("2020-01-01", "2021-12-31")}
-        >>> returns_compute_settings = {"return_type": "LOG", "freq": 1, "returns_compute_device": "CPU", "verbose": False}
-        >>> returns_dict = calculate_returns(
-        ...     "data/stock_data/sp500.csv",
-        ...     regime,
-        ...     "LOG",
-        ...     cvar_params,
-        ...     returns_compute_settings
-        ... )
-        >>> print(returns_dict.keys())
-        dict_keys(['return_type', 'returns', 'regime', 'dates', 'mean', 'covariance', 'tickers'])
-    """
-    # set the default values for the returns calculation settings
-    if isinstance(returns_compute_settings, str):
-        returns_compute_settings = {
-            "return_type": returns_compute_settings,
-            "freq": 1,
-            "returns_compute_device": "CPU",
-            "verbose": False,
-        }
-    elif isinstance(returns_compute_settings, dict):
-        returns_compute_settings = returns_compute_settings
-
-    returns_dict = utils.calculate_returns(
-        input_dataset, regime_dict, returns_compute_settings
-    )
-
-    return returns_dict
-
-
 def generate_samples_kde(
     num_scen: int,
     returns_data: np.ndarray,
@@ -148,8 +94,8 @@ def generate_samples_kde(
     return new_samples
 
 
-def generate_CVaR_data(returns_dict: dict, scenario_generation_settings: dict):
-    """Generate CVaR_data dataclass for CVaR optimization.
+def generate_cvar_data(returns_dict: dict, scenario_generation_settings: dict):
+    """Generate CvarData dataclass for CVaR optimization.
 
     This function creates the CvarData dataclass containing scenarios and probabilities
     based on the specified fit type (Gaussian, KDE, or historical).
@@ -316,7 +262,7 @@ def optimize_market_regimes(
             ]
         )
 
-    result_dataframe = pd.DataFrame(columns=columns)
+    result_rows = []
 
     for regime_name, regime_range in all_regimes.items():
         print("=" * 70)
@@ -334,10 +280,10 @@ def optimize_market_regimes(
 
         # create the returns_dict for the current regime
         curr_regime = {"name": regime_name, "range": regime_range}
-        returns_dict = calculate_returns(
+        returns_dict = utils.calculate_returns(
             input_data_directory, curr_regime, returns_compute_settings
         )
-        returns_dict = generate_CVaR_data(returns_dict, scenario_generation_settings)
+        returns_dict = generate_cvar_data(returns_dict, scenario_generation_settings)
 
         # Initialize result row for this regime
         result_row = {"regime": regime_name}
@@ -359,9 +305,10 @@ def optimize_market_regimes(
                         f"The directory '{problem_from_folder}' does not exist or "
                         "is not a directory."
                     )
-
+                    
+                num_scen = scenario_generation_settings['num_scen']
                 problem_from_file = os.path.join(
-                    problem_from_folder, f"{regime_name}-num_scen{cvar_params.num_scen}"
+                    problem_from_folder, f"{regime_name}-num_scen{num_scen}"
                 )
                 cvar_problem = cvar_optimizer.CVaR(
                     returns_dict=returns_dict,
@@ -399,10 +346,11 @@ def optimize_market_regimes(
                 result_row[f"{solver_name}-CVaR"] = None
                 result_row[f"{solver_name}-optimal_portfolio"] = None
 
-        # Add this regime's results to dataframe
-        result_dataframe = pd.concat(
-            [result_dataframe, pd.DataFrame([result_row])], ignore_index=True
-        )
+        # Add this regime's results to list
+        result_rows.append(result_row)
+
+    # Create DataFrame from collected rows
+    result_dataframe = pd.DataFrame(result_rows, columns=columns)
 
     print("\n" + "=" * 70)
     print("Optimization Complete!")
@@ -761,10 +709,8 @@ def evaluate_user_input_portfolios(
     return custom_portfolios
 
 
-def create_beautiful_efficient_frontier(
-    input_file_name: str,
-    regime_dict: dict,
-    return_type: str,
+def create_efficient_frontier(
+    returns_dict: dict,
     cvar_params: CvarParameters,
     solver_settings: dict,
     notional: float = 1e7,
@@ -790,10 +736,8 @@ def create_beautiful_efficient_frontier(
     annotations, and portfolio analysis.
 
     Args:
-        input_file_name (str): Path to the dataset file.
-        regime_dict (dict): Dictionary containing regime information
-            with 'name' and 'range'.
-        return_type (str): Type of returns to calculate (e.g., "LOG").
+        returns_dict (dict): Dictionary containing returns data and ticker
+            information.
         cvar_params (CvarParameters): CVaR optimization parameters.
         solver_settings (dict): Solver configuration for optimization.
         notional (float, optional): Notional amount (in USD) for scaling
@@ -832,10 +776,8 @@ def create_beautiful_efficient_frontier(
 
     Example:
         >>> regime = {"name": "full_period", "range": ("2020-01-01", "2023-12-31")}
-        >>> results_df, fig, ax = create_beautiful_efficient_frontier(
-        ...     "data/stock_data/sp500.csv",
-        ...     regime,
-        ...     "LOG",
+        >>> results_df, fig, ax = create_efficient_frontier(
+        ...     returns_dict,
         ...     cvar_params,
         ...     {"solver": "CLARABEL", "verbose": False}
         ... )
@@ -856,33 +798,16 @@ def create_beautiful_efficient_frontier(
 
     # Color schemes
     color_schemes = {
-        "modern": {
-            "frontier": "#2E86AB",
-            "benchmark": ["#A23B72", "#F18F01", "#C73E1D"],
-            "assets": "#7209B7",
-            "custom": "#F72585",
-            "background": "#FAFAFA",
-            "grid": "#E0E0E0",
-        },
-        "classic": {
-            "frontier": "#1f77b4",
-            "benchmark": ["#ff7f0e", "#2ca02c", "#d62728"],
-            "assets": "#9467bd",
-            "custom": "#e377c2",
-            "background": "white",
-            "grid": "#E8E8E8",
-        },
-        "vibrant": {
-            "frontier": "#FF6B35",
-            "benchmark": ["#F7931E", "#FFD23F", "#06FFA5"],
-            "assets": "#B6244F",
-            "custom": "#7209B7",
-            "background": "#FFFEF7",
-            "grid": "#E5E5E5",
-        },
-    }
-
-    colors = color_schemes.get(color_scheme, color_schemes["modern"])
+            "modern": {
+                "frontier": "#7cd7fe",
+                "benchmark": ["#ef9100", "#ff8181", "#0d8473"], #NVIDIA orange, red, dark teal
+                "assets": "#c359ef",
+                "custom": "#fc79ca",
+                "background": "#FFFFFF",
+                "grid": "#E0E0E0",
+            }
+        }
+    colors = color_schemes[color_scheme]
 
     # Set style
     if style == "publication":
@@ -894,11 +819,6 @@ def create_beautiful_efficient_frontier(
     else:  # minimal
         plt.style.use("seaborn-v0_8-white")
         sns.set_context("notebook")
-
-    # Generate returns data
-    returns_dict = calculate_returns(
-        input_file_name, regime_dict, return_type, cvar_params
-    )
 
     # Initialize optimization problem
     cvar_problem = cvar_optimizer.CVaR(
@@ -936,7 +856,7 @@ def create_beautiful_efficient_frontier(
         results_data.append(result_row)
         portfolios.append(portfolio)
 
-        if (i + 1) % 5 == 0:
+        if (i + 1) % 10 == 0:
             print(f"   ✓ Completed {i + 1}/{ra_num} portfolios")
 
     # Create results DataFrame
@@ -1072,7 +992,6 @@ def create_beautiful_efficient_frontier(
     )
 
     if title is None:
-        _ = regime_dict.get("name", "Unknown")  # regime_name (unused)
         title = f"Efficient Frontier - {ra_num} portfolios"
 
     ax.set_title(title, fontsize=14, fontweight="bold", pad=20)
@@ -1081,8 +1000,8 @@ def create_beautiful_efficient_frontier(
     ax.grid(True, alpha=0.3, color=colors["grid"])
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("#CCCCCC")
-    ax.spines["bottom"].set_color("#CCCCCC")
+    ax.spines["left"].set_color("#E0E0E0")
+    ax.spines["bottom"].set_color("#E0E0E0")
 
     # Legend
     ax.legend(
@@ -1197,7 +1116,6 @@ def evaluate_all_linear_combinations(
     cvar_data = returns_dict["cvar_data"]
     covariance = returns_dict["covariance"]
     tickers = returns_dict["tickers"]
-    _regime_dict = returns_dict["regime"]  # noqa: F841
 
     if max_assets is None:
         max_assets = len(tickers)

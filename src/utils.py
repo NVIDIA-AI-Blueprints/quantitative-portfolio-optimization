@@ -45,8 +45,8 @@ def get_input_data(filepath):
 
 def calculate_returns(
     input_dataset: Union[pd.DataFrame, str],
-    regime_dict: dict,
-    returns_compute_settings: dict,
+    regime_dict: dict = None,
+    returns_compute_settings: Union[dict, str] = None,
 ):
     """
     preprocess the dat from a particular period of time.
@@ -59,8 +59,24 @@ def calculate_returns(
             "PNL" means the dataset is already in the format of P&L data.
             "NORMAL" means absolute returns.
     :regime_dict: dict of the format {'name': , 'range':(start, end)}
-    :freq: int, frequency of the returns. For example, freq = 1 means daily returns.
+    :returns_compute_settings: Union[dict, str], dictionary containing returns calculation settings or the return type.
+            If a string is provided, it is the return type.
+            If a dictionary is provided, it contains the following keys:
+            - "return_type": str, type of the returns. For example, "LOG" means log returns,
+            - "freq": int, frequency of the returns. For example, freq = 1 means daily returns.
+            - "returns_compute_device": str, device to use for returns calculation. For example, "GPU" or "CPU".
+            - "verbose": bool, whether to print verbose output.
     """
+    # set the default values for the returns calculation settings
+    if returns_compute_settings.get("returns_compute_device") is None:
+        returns_compute_settings["returns_compute_device"] = "CPU"
+    if returns_compute_settings.get("verbose") is None:
+        returns_compute_settings["verbose"] = False
+    if returns_compute_settings.get("freq") is None:
+        returns_compute_settings["freq"] = 1
+    if returns_compute_settings.get("return_type") is None:
+        returns_compute_settings["return_type"] = "LOG"
+
     return_type = returns_compute_settings["return_type"].upper()
     freq = returns_compute_settings["freq"]
 
@@ -69,12 +85,12 @@ def calculate_returns(
     else:
         input_data = input_dataset
 
-    regime_range = regime_dict["range"]
-    if regime_range is None:
+    if regime_dict is None:
         input_data = input_data
     else:
-        start, end = regime_range
+        start, end = regime_dict["range"]
         input_data = input_data.loc[start:end]
+        
     input_data = input_data.dropna(axis=1)
 
     if return_type == "LOG":
