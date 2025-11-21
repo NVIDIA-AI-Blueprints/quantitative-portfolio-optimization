@@ -1,4 +1,4 @@
-GPU-Accelerated Portfolio Optimization Blueprint Licenses
+Quantitative Portfolio Optimization developer example Licenses
 =================================
 
 This file contains third-party license information for software packages used in this project.
