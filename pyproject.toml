@@ -41,6 +41,24 @@ cufolio = "src"
 [tool.setuptools.package-data]
 "*" = ["*.csv", "*.pkl", "*.parquet"]
 
+[tool.uv]
+managed = true
+index-url = "https://pypi.org/simple"
+
+[[tool.uv.index]]
+name = "nvidia"
+url = "https://pypi.nvidia.com/cuopt-cu13/"
+explicit = true
+
+[[tool.uv.index]]
+name = "nvidia-ml"
+url = "https://pypi.nvidia.com/cuml-cu13/"
+explicit = true
+
+[tool.uv.sources]
+cuopt-cu13 = { index = "nvidia" }
+cuml-cu13 = { index = "nvidia-ml" }
+
 [build-system]
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
