@@ -1,6 +1,6 @@
 # Contributing to NVIDIA GPU-Accelerated Portfolio Optimization
 
-Thank you for your interest in contributing to NVIDIA GPU-Accelerated Portfolio Optimization! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to Quantitative Portfolio Optimization developer example! This document provides guidelines and instructions for contributing to the project.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ We are committed to providing a welcoming and inclusive environment for all cont
 
 ## Ways to Contribute
 
-There are many ways to contribute to NVIDIA GPU-Accelerated Portfolio Optimization:
+There are many ways to contribute to Quantitative Portfolio Optimization developer example:
 
 - **Report bugs**: If you find a bug, please open an issue with detailed information
 - **Suggest enhancements**: Have an idea for a new feature? Let us know!
@@ -108,7 +108,7 @@ Or let pre-commit hooks handle it automatically.
 We use `flake8` for linting. Run it with:
 
 ```bash
-flake8 src/ CVaR/ ScenarioGeneration/
+flake8 src/ 
 ```
 
 ### Documentation

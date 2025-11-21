@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Quantitative Portfolio Optimization developer example is a GPU-accelerated solution designed to enable fast, scalable, and real-time portfolio optimization for financial institutions. Leveraging NVIDIA® cuOpt™ and RAPIDS, this developer example delivers near-real-time solutions for large-scale Mean-CVaR portfolio optimization problems, allowing enterprises to model advanced risk measures and optimize complex portfolios in accelerated time.
+Quantitative Portfolio Optimization developer example is a GPU-accelerated solution designed to enable fast, scalable, and real-time portfolio optimization for financial institutions. Leveraging NVIDIA® cuOpt™ and RAPIDS, this developer example delivers near-real-time solutions for large-scale Mean-CVaR portfolio optimization problems, allowing enterprises to model advanced risk measures and optimize complex portfolios in accelerated time.
 
 Portfolio Optimization (PO) involves solving high-dimensional, non-linear numerical optimization problems that balance risk and return to meet investment goals. By introducing GPU-accelerated building blocks, this project significantly reduces computation times while improving solution quality, making sophisticated portfolio optimization accessible and practical for large-scale applications.
 

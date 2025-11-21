@@ -1,7 +1,7 @@
 [project]
 name = "cufolio"
 version = "25.10"
-description = "GPU-accelerated portfolio optimization with cuOpt"
+description = "Quantitative Portfolio Optimization developer example"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
