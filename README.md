@@ -2,34 +2,22 @@
 
 ## Overview
 
-This project provides GPU-accelerated solutions for portfolio optimization, a computationally intensive task central to portfolio management. It leverages NVIDIA technologies including **cuOpt**, **RAPIDS**, and the **HPC SDK** to deliver substantial performance improvements over traditional CPU-based approaches.
+The Quantitative Portfolio Optimization developer example is a GPU-accelerated solution designed to enable fast, scalable, and real-time portfolio optimization for financial institutions. Leveraging NVIDIA® cuOpt™ and RAPIDS, this developer example delivers near-real-time solutions for large-scale Mean-CVaR portfolio optimization problems, allowing enterprises to model advanced risk measures and optimize complex portfolios in accelerated time.
 
 Portfolio Optimization (PO) involves solving high-dimensional, non-linear numerical optimization problems that balance risk and return to meet investment goals. By introducing GPU-accelerated building blocks, this project significantly reduces computation times while improving solution quality, making sophisticated portfolio optimization accessible and practical for large-scale applications.
 
+<p align="center">
+    <img src="./docs/arch_diagram.png" alt="architecture diagram for PO" width="750"/>
+</p>
+
 ### Key Features
 
-- **GPU-Accelerated Optimization**: Leverages NVIDIA cuOpt LP/MILP solvers for dramatic speedups
-- **Advanced Risk Measure**: Supports Conditional Value-at-Risk (CVaR) optimization
-- **Real-World Constraints**: Implements concentration limits, leverage constraints, turnover limits, and cardinality constraints
-- **Scenario Generation**: Uses GPU-accelerated KDE (Kernel Density Estimation) for return distribution modeling
-- **Backtesting Framework**: Comprehensive tools for evaluating portfolio performance
-- **Dynamic Re-Balancing** Backtesting tools for testing re-balancing strategies
-
-### Why Portfolio Optimization Matters
-
-Portfolio Management (PM) is crucial for all investment-focused institutions, including buy-side and sell-side operations across asset classes. As financial markets grow in complexity and diversity, the demand for sophisticated PM techniques increases. Currently, most institutions rely on CPUs and third-party solvers, which can be slow and costly. GPU acceleration offers a path to faster, more efficient, and more scalable portfolio optimization solutions.
-
-### Optimization Methods
-
-**CVaR Optimization**: Conditional Value-at-Risk offers a more nuanced assessment of risk by focusing on the tail end of the loss distribution. Unlike Value-at-Risk (VaR), CVaR accounts for the average of losses that exceed a threshold, providing a more comprehensive measure of extreme risks. This approach is particularly valuable for portfolios with asymmetric return distributions.
-
-### Portfolio Optimization Workflow
-![Portfolio Optimization workflow](./images/po_workflow.png)
-
-### NVIDIA Technology Stack
-<p align="center">
-    <img src="./images/nvidia_po_stack.png" alt="NVIDIA stack for PO" width="750"/>
-</p>
+- **End-to-End GPU Workflow**: Accelerates the portfolio allocation problem using NVIDIA® cuOpt™, delivering near-real-time optimization.
+- **Flexible Financial Model Building**: Fully customizable constraints, including CVaR, leverage, budgets, turnover, and cardinality limits.
+- **Data-driven Risk Modeling**: Utilizes CVaR as a risk measure that is scenario-based and requires no assumptions about the asset return distribution.
+- **Full Pipeline Support**: Provides tools for performance evaluation, strategy backtesting, benchmarking, and visualization.
+- **Easy Benchmarking**: Streamlines the process of benchmarking against CP-based libraries and solvers.
+- **Scalable & Efficient**: Excels at solving large LP and MILP problems, leveraging NVIDIA libraries for pre- and post-optimization acceleration.
 
 ## Get Started
 

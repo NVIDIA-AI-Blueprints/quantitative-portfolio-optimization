@@ -1,0 +1,120 @@
+name: Portfolio Optimization Notebook Runner
+
+on:
+  push:
+    branches:
+      - main
+      - release-25.12
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-notebooks:
+    runs-on: arc-runner-set-oke-org-nv-ai-bp
+    env:
+      PYTHON_VERSION: 3.12
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Git LFS
+        run: |
+          echo "===================== Install Git LFS ====================="
+          sudo apt-get update
+          sudo apt-get install -y git-lfs
+          git lfs install
+
+      - name: Pull Git LFS files
+        run: |
+          echo "===================== Pull LFS files ====================="
+          git lfs pull
+
+      - name: Check System Info
+        run: |
+          echo "===================== System Info ====================="
+          more /etc/os-release
+          uname -a
+          nvidia-smi
+          docker version 
+
+      - name: Run container and execute notebooks
+        run: |
+          docker run --gpus all --rm \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            nvcr.io/nvidia/pytorch:25.08-py3 \
+            bash -c '
+              echo "===================== Python and GPU Info ====================="
+              python --version
+              nvidia-smi
+
+              echo "===================== Create Virtual Environment ====================="
+              python -m venv .venv
+              source .venv/bin/activate
+
+              echo "===================== Install Dependencies ====================="
+              python -m pip install --upgrade pip
+              pip install .
+
+              echo "===================== Install Development Tools ====================="
+              pip install ".[dev]"
+
+              echo "===================== Install Jupyter ====================="
+              pip install jupyter jupyterlab ipykernel papermill nbconvert
+
+              echo "===================== Create Jupyter Kernel ====================="
+              python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
+
+              echo "===================== List Jupyter Kernel ====================="
+              jupyter kernelspec list
+
+              echo "===================== Change to notebooks directory ====================="
+              cd notebooks
+
+              echo "===================== Run cvar_basic notebook ====================="
+              papermill cvar_basic.ipynb cvar_basic_result.ipynb --kernel portfolio-opt --log-output --log-level DEBUG
+
+              echo "===================== Run efficient_frontier notebook ====================="
+              papermill efficient_frontier.ipynb efficient_frontier_result.ipynb --kernel portfolio-opt  --log-output --log-level DEBUG
+
+              echo "===================== Run rebalancing_strategies notebook ====================="
+              papermill rebalancing_strategies.ipynb rebalancing_strategies_result.ipynb --kernel portfolio-opt  --log-output --log-level DEBUG
+
+              echo "===================== Convert notebooks to HTML ====================="
+              jupyter nbconvert --to html cvar_basic_result.ipynb
+              jupyter nbconvert --to html efficient_frontier_result.ipynb
+              jupyter nbconvert --to html rebalancing_strategies_result.ipynb
+            '
+
+      - name: Verify results
+        if: always()
+        env:
+          TEST_DOCKER_PULL_KEY: ${{ secrets.TEST_DOCKER_PULL_KEY }}        
+        run: |
+          echo "Checking for generated files...."
+          ls -lh notebooks/*result*
+          cd notebooks
+          echo "$TEST_DOCKER_PULL_KEY" |docker login nvcr.io --username  '$oauthtoken' --password-stdin 
+          docker run --rm \
+            -v ./cvar_basic_result.html:/app/input/quantitative_portfolio_optimization/cvar_basic.html  \
+            -v ./efficient_frontier_result.html:/app/input/quantitative_portfolio_optimization/efficient_frontier.html  \
+            -v ./rebalancing_strategies_result.html:/app/input/quantitative_portfolio_optimization/rebalancing_strategies.html  \
+            -v "$(pwd):/workspace" \
+            nvcr.io/rw983xdqtcdp/auto_test_team/blueprint-github-test-image:latest \
+            pytest -m quantitative_portfolio_optimization --disable-warnings --html=/workspace/quantitative_portfolio_optimization.html --self-contained-html
+          
+
+      - name: Upload notebook results as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notebook-results
+          path: |
+             notebooks/cvar_basic_result.html
+             notebooks/efficient_frontier_result.html
+             notebooks/rebalancing_strategies_result.html
+             notebooks/quantitative_portfolio_optimization.html
+          retention-days: 30
