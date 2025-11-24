@@ -50,22 +50,18 @@ jobs:
               python --version
               nvidia-smi
 
-              echo "===================== Create Virtual Environment ====================="
-              python -m venv .venv
-              source .venv/bin/activate
+              echo "===================== Install uv ====================="
+              curl -LsSf https://astral.sh/uv/install.sh | sh
+              export PATH="/root/.cargo/bin:$PATH"
 
-              echo "===================== Install Dependencies ====================="
-              python -m pip install --upgrade pip
-              pip install .
-
-              echo "===================== Install Development Tools ====================="
-              pip install ".[dev]"
+              echo "===================== Install Dependencies with uv ====================="
+              uv sync --extra dev
 
               echo "===================== Install Jupyter ====================="
-              pip install jupyter jupyterlab ipykernel papermill nbconvert
+              uv pip install jupyter jupyterlab ipykernel papermill nbconvert
 
               echo "===================== Create Jupyter Kernel ====================="
-              python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
+              uv run python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
 
               echo "===================== List Jupyter Kernel ====================="
               jupyter kernelspec list

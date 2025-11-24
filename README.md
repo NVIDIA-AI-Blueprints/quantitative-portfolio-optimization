@@ -110,27 +110,26 @@ docker run --gpus all -it --rm nvcr.io/nvidia/pytorch:25.08-py3
 git clone https://github.com/NVIDIA-AI-Blueprints/quantitative-portfolio-optimization.git
 cd quantitative-portfolio-optimization
 
-# Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install with all dependencies
-pip install .
+# Install with all dependencies using uv
+uv sync
 
 # Optional: Install development tools
-pip install ".[dev]"
+uv sync --extra dev
 
 # Install Jupyter and create kernel
-pip install jupyter jupyterlab ipykernel
+uv pip install jupyter jupyterlab ipykernel
 
 # Create a Jupyter kernel for this environment
-python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
+uv run python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
 
 # Launch Jupyter Lab
-jupyter lab
+uv run jupyter lab
 ```
 
-**Note:** The PyTorch container already includes CUDA and other GPU dependencies. This installation adds the optimization and ML libraries (cuOpt, cuML).
+**Note:** The PyTorch container already includes CUDA and other GPU dependencies. This installation adds the optimization and ML libraries (cuOpt, cuML). The `uv sync` command automatically creates a virtual environment and installs all dependencies from `uv.lock`.
 
 #### Using the Jupyter Kernel
 

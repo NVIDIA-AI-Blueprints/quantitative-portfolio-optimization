@@ -44,25 +44,29 @@ There are many ways to contribute to Quantitative Portfolio Optimization develop
    cd cufolio
    ```
 
-2. **Create a Virtual Environment**
+2. **Install uv (if not already installed)**
 
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+   For Windows, use:
+   ```powershell
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
    ```
 
 3. **Install Development Dependencies**
 
    ```bash
-   pip install -e ".[dev]"
+   uv sync --extra dev
    ```
 
-   This installs NVIDIA GPU-Accelerated Portfolio Optimization in editable mode along with development tools like `black`, `isort`, `flake8`, and `pre-commit`.
+   This automatically creates a virtual environment and installs the project in editable mode along with development tools like `black`, `isort`, `flake8`, and `pre-commit`.
 
 4. **Set Up Pre-commit Hooks**
 
    ```bash
-   pre-commit install
+   uv run pre-commit install
    ```
 
    This will automatically run code formatting and linting checks before each commit.
@@ -74,7 +78,8 @@ For a consistent development environment with all GPU dependencies:
 ```bash
 docker run --gpus all -it --rm -v $(pwd):/workspace nvcr.io/nvidia/pytorch:25.08-py3
 cd /workspace
-pip install -e ".[dev]"
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync --extra dev
 ```
 
 ## Coding Standards
@@ -97,8 +102,8 @@ All code must be formatted with:
 Run formatters before committing:
 
 ```bash
-black .
-isort .
+uv run black .
+uv run isort .
 ```
 
 Or let pre-commit hooks handle it automatically.
@@ -108,7 +113,7 @@ Or let pre-commit hooks handle it automatically.
 We use `flake8` for linting. Run it with:
 
 ```bash
-flake8 src/ 
+uv run flake8 src/ 
 ```
 
 ### Documentation
@@ -151,13 +156,13 @@ We encourage comprehensive testing of all new features and bug fixes.
 
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run specific test file
-pytest tests/test_cvar_optimizer.py
+uv run pytest tests/test_cvar_optimizer.py
 
 # Run with coverage
-pytest --cov=src --cov-report=html
+uv run pytest --cov=src --cov-report=html
 ```
 
 ### Writing Tests
@@ -220,10 +225,10 @@ Explain what changes were made and why.
 2. **Run all checks** before submitting:
 
    ```bash
-   black .
-   isort .
-   flake8 src/
-   pytest
+   uv run black .
+   uv run isort .
+   uv run flake8 src/
+   uv run pytest
    ```
 
 3. **Create a Pull Request** with:
