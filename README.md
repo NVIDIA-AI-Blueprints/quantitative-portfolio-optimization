@@ -116,10 +116,10 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install with all dependencies using uv
 uv sync
 
-# Optional: Install development tools
-uv sync --extra dev
+# Optional: Install development tools (including ipykernel)
+UV_CACHE_DIR=/path/to/cache/directory uv sync --extra dev
 
-# Install Jupyter and create kernel
+# Install Jupyter and JupyterLab
 uv pip install jupyter jupyterlab ipykernel
 
 # Create a Jupyter kernel for this environment
@@ -130,6 +130,11 @@ uv run jupyter lab
 ```
 
 **Note:** The PyTorch container already includes CUDA and other GPU dependencies. This installation adds the optimization and ML libraries (cuOpt, cuML). The `uv sync` command automatically creates a virtual environment and installs all dependencies from `uv.lock`.
+
+**Important Notes:**
+- If you encounter "No space left on device" errors, use the `--cache-dir` flag to specify an alternate cache location with sufficient disk space (at least 10GB free recommended)
+- You can also set the `UV_CACHE_DIR` environment variable instead of using the flag: `export UV_CACHE_DIR=/path/to/cache/directory`
+- The project is configured to resolve dependencies only for x86_64 platforms to avoid compatibility issues
 
 #### Using the Jupyter Kernel
 
