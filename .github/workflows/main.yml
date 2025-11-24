@@ -46,6 +46,7 @@ jobs:
             -w /workspace \
             nvcr.io/nvidia/pytorch:25.08-py3 \
             bash -c '
+              set -e
               echo "===================== Python and GPU Info ====================="
               python --version
               nvidia-smi
