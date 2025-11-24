@@ -53,6 +53,7 @@ jobs:
               echo "===================== Install uv ====================="
               curl -LsSf https://astral.sh/uv/install.sh | sh
               export PATH="/root/.cargo/bin:$PATH"
+              source $HOME/.local/bin/env
 
               echo "===================== Install Dependencies with uv ====================="
               uv sync --extra dev
