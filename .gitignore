@@ -47,3 +47,6 @@ cufolio_venv/
 .DS_Store
 Thumbs.db
 
+# Data files
+data/stock_data/*.csv
+
