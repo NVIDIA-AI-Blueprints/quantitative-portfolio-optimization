@@ -18,8 +18,10 @@ Portfolio Optimization (PO) involves solving high-dimensional, non-linear numeri
 - **Full Pipeline Support**: Provides tools for performance evaluation, strategy backtesting, benchmarking, and visualization.
 - **Easy Benchmarking**: Streamlines the process of benchmarking against CP-based libraries and solvers.
 - **Scalable & Efficient**: Excels at solving large LP and MILP problems, leveraging NVIDIA libraries for pre- and post-optimization acceleration.
+## Disclaimer
 
 ## Get Started
+This project will download and install additional third-party open source software projects. Review the license terms of these open source projects before use.
 
 ### System Requirements
 <details>
