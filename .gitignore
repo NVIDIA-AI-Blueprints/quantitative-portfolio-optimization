@@ -1,6 +1,5 @@
 # Result files
 results/
-blueprint_venv/
 
 # Python
 __pycache__/
@@ -47,4 +46,7 @@ cufolio_venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Data files
+data/stock_data/*.csv
 
