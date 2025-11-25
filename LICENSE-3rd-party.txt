@@ -11,7 +11,8 @@ Apache License, Version 2.0
 The Apache License, Version 2.0 is a permissive license that also provides an express grant of patent rights. 
 
 Packages under the Apache License, Version 2.0:
-    - CVXPY - Copyright, the CVXPY authors
+    - CVXPY - Copyright the CVXPY authors
+    - yfinance - Copyright 2017-2025 Ran Aroussi.
 
 
 Full Apache License, Version 2.0 Text:

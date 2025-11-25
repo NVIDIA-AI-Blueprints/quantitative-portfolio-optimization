@@ -12,7 +12,7 @@ dependencies = [
     "cuml-cu13==25.10.0",
     "cuopt-cu13==25.10.0",
     "seaborn==0.13.2",
-    "highspy==1.11.0",
+    "yfinance>=0.2.0"
 ]
 
 [project.optional-dependencies]
@@ -40,6 +40,9 @@ cufolio = "src"
 
 [tool.setuptools.package-data]
 "*" = ["*.csv", "*.pkl", "*.parquet"]
+
+[tool.uv]
+managed = true
 
 [build-system]
 requires = ["setuptools>=64", "wheel"]
