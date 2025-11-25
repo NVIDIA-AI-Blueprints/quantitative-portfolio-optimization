@@ -59,8 +59,8 @@ jobs:
               echo "===================== Install Dependencies with uv ====================="
               uv sync --extra dev
 
-              echo "===================== Install Jupyter ====================="
-              uv pip install jupyter jupyterlab ipykernel papermill nbconvert
+              echo "===================== Install Jupyter and other packages ====================="
+              pip install jupyter jupyterlab ipykernel papermill nbconvert
 
               echo "===================== Create Jupyter Kernel ====================="
               uv run python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
