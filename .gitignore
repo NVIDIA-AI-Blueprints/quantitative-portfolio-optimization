@@ -1,6 +1,5 @@
 # Result files
 results/
-blueprint_venv/
 
 # Python
 __pycache__/
