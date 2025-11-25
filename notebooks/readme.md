@@ -44,6 +44,17 @@ This notebook introduces dynamic portfolio management techniques:
 - Analyzing strategy performance over different market conditions
 - Comparing multiple rebalancing approaches
 
+### 3. All-in-One Notebook
+
+#### [`launchable.ipynb`](launchable.ipynb) - Combined Notebook for Brev Launchable
+
+This notebook combines `cvar_basic.ipynb`, `efficient_frontier.ipynb`, and `rebalancing_strategies.ipynb` into a single file. It is specifically designed for [Brev](https://brev.dev/) launchable environments, providing all portfolio optimization examples and workflows in one place for easy execution in cloud GPU environments.
+
+**Use this notebook if:**
+- You're running on a Brev launchable instance
+- You prefer having all examples in a single notebook
+- You want to run the complete workflow without switching between files
+
 ## Additional Resources
 
 For questions or issues, please visit:
