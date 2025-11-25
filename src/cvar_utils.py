@@ -176,7 +176,6 @@ def optimize_market_regimes(
     all_regimes: dict,
     cvar_params: CvarParameters,
     solver_settings_list: list[dict],
-    problem_from_folder: str = None,
     results_csv_file_name: str = None,
     num_synthetic: int = 0,
     print_results: bool = True,
@@ -197,9 +196,6 @@ def optimize_market_regimes(
         solver_settings_list (list[dict]): List of solver settings to test.
             Each dict contains solver-specific settings
             (e.g., {'solver': cp.CLARABEL, 'verbose': False}).
-        problem_from_folder (str, optional): Folder containing existing
-            optimization problems. If None, problems are set up from scratch.
-            Defaults to None.
         results_csv_file_name (str, optional): CSV filename to save results.
             Defaults to None.
         num_synthetic (int, optional): Number of synthetic data copies to generate.
@@ -241,8 +237,6 @@ def optimize_market_regimes(
             # CVXPY solver - extract name from solver object
             solver_obj = settings["solver"]
             return str(solver_obj).replace("cp.", "").replace("solvers.", "")
-        elif "api" in settings and settings["api"] == "cuopt_python":
-            return "CUOPT"
         else:
             raise ValueError(f"Unsupported solver settings: {settings}")
 
@@ -294,28 +288,10 @@ def optimize_market_regimes(
             print(f"\n--- Testing Solver: {solver_name} ---")
 
             # Set up optimization problem
-            # (create new instance for each solver if needed)
-            if problem_from_folder is None:
-                cvar_problem = cvar_optimizer.CVaR(
-                    returns_dict=returns_dict, cvar_params=cvar_params
-                )
-            else:
-                if not os.path.isdir(problem_from_folder):
-                    raise FileNotFoundError(
-                        f"The directory '{problem_from_folder}' does not exist or "
-                        "is not a directory."
-                    )
-                    
-                num_scen = scenario_generation_settings['num_scen']
-                problem_from_file = os.path.join(
-                    problem_from_folder, f"{regime_name}-num_scen{num_scen}"
-                )
-                cvar_problem = cvar_optimizer.CVaR(
-                    returns_dict=returns_dict,
-                    cvar_params=cvar_params,
-                    problem_from_file=problem_from_file,
-                )
-
+            cvar_problem = cvar_optimizer.CVaR(
+                        returns_dict=returns_dict, cvar_params=cvar_params
+            )
+        
             # Solve optimization problem
             try:
                 result, portfolio = cvar_problem.solve_optimization_problem(
