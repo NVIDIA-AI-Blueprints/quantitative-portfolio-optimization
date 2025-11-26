@@ -106,7 +106,7 @@ To install dependencies on the NVIDIA PyTorch container:
 
 ```bash
 # Start the container
-docker run --gpus all -it --rm -v ./:/workspace/host --ipc=host -p 8888:8888 -img nvcr.io/nvidia/pytorch:25.08-py3
+docker run --gpus all -it --rm -v ./:/workspace/host --ipc=host -p 8888:8888 nvcr.io/nvidia/pytorch:25.08-py3
 
 # Clone the repository
 git clone https://github.com/NVIDIA-AI-Blueprints/quantitative-portfolio-optimization.git
