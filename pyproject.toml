@@ -9,8 +9,8 @@ dependencies = [
     "pandas==2.3.2",
     "cvxpy==1.7.3",
     "scikit-learn==1.7.1",
-    "cuml-cu13==25.10.0",
-    "cuopt-cu13==25.10.0",
+    "cuml-cu12==25.10.0",
+    "cuopt-cu12==25.10.*",
     "seaborn==0.13.2",
     "yfinance>=0.2.0"
 ]

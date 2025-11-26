@@ -106,7 +106,7 @@ To install dependencies on the NVIDIA PyTorch container:
 
 ```bash
 # Start the container
-docker run --gpus all -it --rm nvcr.io/nvidia/pytorch:25.08-py3
+docker run --gpus all -it --rm -v ./:/workspace/host --ipc=host -p 8888:8888 -img nvcr.io/nvidia/pytorch:25.08-py3
 
 # Clone the repository
 git clone https://github.com/NVIDIA-AI-Blueprints/quantitative-portfolio-optimization.git
@@ -114,6 +114,11 @@ cd quantitative-portfolio-optimization
 
 # Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# To add $HOME/.local/bin to your PATH, either restart your shell or run:
+
+source $HOME/.local/bin/env #(sh, bash, zsh)
+#source $HOME/.local/bin/env.fish (fish)
 
 # Install with all dependencies using uv
 uv sync
@@ -128,7 +133,7 @@ uv pip install jupyter jupyterlab ipykernel
 uv run python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
 
 # Launch Jupyter Lab
-uv run jupyter lab
+jupyter lab --no-browser --NotebookApp.token=''
 ```
 
 **Note:** The PyTorch container already includes CUDA and other GPU dependencies. This installation adds the optimization and ML libraries (cuOpt, cuML). The `uv sync` command automatically creates a virtual environment and installs all dependencies from `uv.lock`.
