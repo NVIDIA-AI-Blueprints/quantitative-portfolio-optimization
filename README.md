@@ -106,7 +106,7 @@ To install dependencies on the NVIDIA PyTorch container:
 
 ```bash
 # Start the container
-docker run --gpus all -it --rm nvcr.io/nvidia/pytorch:25.08-py3
+docker run --gpus all -it --rm -v ./:/workspace/host --ipc=host -p 8888:8888 nvcr.io/nvidia/pytorch:25.08-py3
 
 # Clone the repository
 git clone https://github.com/NVIDIA-AI-Blueprints/quantitative-portfolio-optimization.git
@@ -115,27 +115,34 @@ cd quantitative-portfolio-optimization
 # Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install with all dependencies using uv
-uv sync
+# To add $HOME/.local/bin to your PATH, either restart your shell or run:
+source $HOME/.local/bin/env  # (sh, bash, zsh)
+# source $HOME/.local/bin/env.fish  # (fish)
 
-# Optional: Install development tools (including ipykernel)
-UV_CACHE_DIR=/path/to/cache/directory uv sync --extra dev
+# Install with CUDA-specific dependencies
+# For CUDA 12.x:
+uv sync --extra cuda12
 
-# Install Jupyter and JupyterLab
-uv pip install jupyter jupyterlab ipykernel
+# For CUDA 13.x:
+uv sync --extra cuda13
+
+# Optional: Install development tools
+uv sync --extra cuda12 --extra dev  # or cuda13
 
 # Create a Jupyter kernel for this environment
 uv run python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
 
 # Launch Jupyter Lab
-uv run jupyter lab
+uv run jupyter lab --no-browser --NotebookApp.token=''
 ```
 
-**Note:** The PyTorch container already includes CUDA and other GPU dependencies. This installation adds the optimization and ML libraries (cuOpt, cuML). The `uv sync` command automatically creates a virtual environment and installs all dependencies from `uv.lock`.
+**Note:** The `--extra cuda12` or `--extra cuda13` flag installs the GPU packages (cuOpt, cuML) matching your CUDA version. The `uv sync` command automatically creates a virtual environment and installs all dependencies from `uv.lock`.
+
+**Tip:** To check your CUDA version, run `nvidia-smi` and look for "CUDA Version" in the output.
 
 **Important Notes:**
-- If you encounter "No space left on device" errors, use the `--cache-dir` flag to specify an alternate cache location with sufficient disk space (at least 10GB free recommended)
-- You can also set the `UV_CACHE_DIR` environment variable instead of using the flag: `export UV_CACHE_DIR=/path/to/cache/directory`
+- If you encounter "No space left on device" errors, set `UV_CACHE_DIR` to an alternate cache location: `export UV_CACHE_DIR=/path/to/cache/directory`
+- The `cuda12` and `cuda13` extras are mutually exclusive - install only one based on your system's CUDA version
 
 #### Using the Jupyter Kernel
 
