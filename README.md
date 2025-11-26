@@ -118,7 +118,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # To add $HOME/.local/bin to your PATH, either restart your shell or run:
 
 source $HOME/.local/bin/env #(sh, bash, zsh)
-#source $HOME/.local/bin/env.fish (fish)
+# source $HOME/.local/bin/env.fish (fish)
 
 # Install with all dependencies using uv
 uv sync
