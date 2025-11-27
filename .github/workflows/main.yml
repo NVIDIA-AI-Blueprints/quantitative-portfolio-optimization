@@ -57,8 +57,8 @@ jobs:
               source $HOME/.local/bin/env
 
               echo "===================== Install Dependencies with uv ====================="
-              uv sync --extra cuda12
-              uv sync --extra cuda12 --extra dev
+              uv sync --extra cuda13
+              uv sync --extra cuda13 --extra dev
               
 
               echo "===================== Install Jupyter and other packages ====================="
