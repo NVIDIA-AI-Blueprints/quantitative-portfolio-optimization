@@ -1,4 +1,4 @@
-# Contributing to NVIDIA GPU-Accelerated Portfolio Optimization
+# Contributing to NVIDIA Quantitative Portfolio Optimization developer example
 
 Thank you for your interest in contributing to Quantitative Portfolio Optimization developer example! This document provides guidelines and instructions for contributing to the project.
 
@@ -289,7 +289,7 @@ What actually happened.
 - Python: [e.g., 3.10]
 - CUDA: [e.g., 12.2]
 - GPU: [e.g., A100]
-- NVIDIA GPU-Accelerated Portfolio Optimization version: [e.g., 25.10]
+- NVIDIA Quantitative Portfolio Optimization developer example version: [e.g., 25.10]
 
 **Additional Context**
 Any other relevant information.
@@ -309,10 +309,6 @@ When suggesting features:
 - **Issues**: Open an issue for bugs or questions
 - **Discussions**: Use GitHub Discussions for general questions
 - **Documentation**: Check the README and module-specific docs
-
-## Recognition
-
-Contributors will be acknowledged in release notes and documentation. Thank you for helping make NVIDIA GPU-Accelerated Portfolio Optimization better!
 
 ## Signing Your Work
 
