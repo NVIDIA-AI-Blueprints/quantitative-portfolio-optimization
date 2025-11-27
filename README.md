@@ -132,7 +132,7 @@ uv run python -m ipykernel install --user --name=portfolio-opt --display-name "P
 uv run jupyter lab --no-browser --NotebookApp.token=''
 ```
 
-**Note:** The `--extra cuda12` or `--extra cuda13` flag installs the GPU packages (cuOpt, cuML) matching your CUDA version. The `uv sync` command automatically creates a virtual environment and installs all dependencies from `uv.lock`.
+**Note:** If you use a different container image than the suggested one above, during uv sync, please use the `--extra cuda12` or `--extra cuda13` flag to install the GPU packages (cuOpt, cuML) matching your container's CUDA version. The `uv sync` command automatically creates a virtual environment and installs all dependencies from `uv.lock`.
 
 **Tip:** To check your CUDA version, run `nvidia-smi` and look for "CUDA Version" in the output.
 
