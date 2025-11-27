@@ -57,7 +57,9 @@ jobs:
               source $HOME/.local/bin/env
 
               echo "===================== Install Dependencies with uv ====================="
-              uv sync --extra dev
+              uv sync --extra cuda12
+              uv sync --extra cuda12 --extra dev
+              
 
               echo "===================== Install Jupyter and other packages ====================="
               pip install jupyter jupyterlab ipykernel papermill nbconvert
@@ -80,10 +82,15 @@ jobs:
               echo "===================== Run rebalancing_strategies notebook ====================="
               papermill rebalancing_strategies.ipynb rebalancing_strategies_result.ipynb --kernel portfolio-opt  --log-output --log-level DEBUG
 
+              echo "===================== Run launchable notebook ====================="
+              papermill launchable.ipynb launchable_brev_result.ipynb --kernel portfolio-opt  --log-output --log-level DEBUG
+
+
               echo "===================== Convert notebooks to HTML ====================="
               jupyter nbconvert --to html cvar_basic_result.ipynb
               jupyter nbconvert --to html efficient_frontier_result.ipynb
               jupyter nbconvert --to html rebalancing_strategies_result.ipynb
+              jupyter nbconvert --to html launchable_brev_result.ipynb
             '
 
       - name: Verify results
@@ -99,6 +106,7 @@ jobs:
             -v ./cvar_basic_result.html:/app/input/quantitative_portfolio_optimization/cvar_basic.html  \
             -v ./efficient_frontier_result.html:/app/input/quantitative_portfolio_optimization/efficient_frontier.html  \
             -v ./rebalancing_strategies_result.html:/app/input/quantitative_portfolio_optimization/rebalancing_strategies.html  \
+            -v ./launchable_brev_result.html:/app/input/quantitative_portfolio_optimization/launchable_brev_result.html  \
             -v "$(pwd):/workspace" \
             nvcr.io/rw983xdqtcdp/auto_test_team/blueprint-github-test-image:latest \
             pytest -m quantitative_portfolio_optimization --disable-warnings --html=/workspace/quantitative_portfolio_optimization.html --self-contained-html
@@ -113,5 +121,6 @@ jobs:
              notebooks/cvar_basic_result.html
              notebooks/efficient_frontier_result.html
              notebooks/rebalancing_strategies_result.html
+             notebooks/launchable_brev_result.html
              notebooks/quantitative_portfolio_optimization.html
           retention-days: 30
