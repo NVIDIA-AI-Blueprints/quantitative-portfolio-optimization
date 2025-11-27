@@ -93,13 +93,6 @@ The above configuration will provide optimal performance for large-scale optimiz
 
 </details>
 
-<details>
-<summary><b>Container Requirements</b></summary>
-
-- **nvidia-container-toolkit** needs to be installed for Docker deployment
-
-</details>
-
 ### Installation on PyTorch Container
 
 To install dependencies on the NVIDIA PyTorch container:
