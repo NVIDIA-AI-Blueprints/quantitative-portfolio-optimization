@@ -120,14 +120,10 @@ source $HOME/.local/bin/env  # (sh, bash, zsh)
 # source $HOME/.local/bin/env.fish  # (fish)
 
 # Install with CUDA-specific dependencies
-# For CUDA 12.x:
-uv sync --extra cuda12
-
-# For CUDA 13.x:
-uv sync --extra cuda13
+uv sync --extra cuda13 # this container image has cuda13
 
 # Optional: Install development tools
-uv sync --extra cuda12 --extra dev  # or cuda13
+uv sync --extra cuda13 --extra dev  
 
 # Create a Jupyter kernel for this environment
 uv run python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
