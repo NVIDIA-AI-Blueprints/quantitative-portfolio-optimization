@@ -99,12 +99,11 @@ Explore the example notebooks in the [`notebooks/`](notebooks/) directory:
 - **`cvar_basic.ipynb`**: Complete walkthrough of Mean-CVaR portfolio optimization with GPU acceleration
 - **`efficient_frontier.ipynb`**: A quick tutorial on how to generate efficient frontier.
 - **`rebalancing_strategies.ipynb`** Introduction to dynamic re-balancing and examples of testing strategies
-  
+
+---
 ## Overview
 
 This developer example addresses the financial industry's trade-off between **computational speed** and **model complexity** in portfolio optimization. By leveraging **NVIDIA accelerated computing**, this solution transforms robust analysis (e.g., Mean-CVaR, large-scale simulations) from slow batch processing into a **fast, iterative workflow** for dynamic decision-making.
-
----
 
 ## 🏗️ Accelerated Architecture
 
@@ -123,8 +122,6 @@ The end-to-end pipeline connects market data ingestion to optimal strategy backt
 ### 3. Strategy Backtesting & Refinement
 * **Technology:** **CUDA-X Data Science** and **HPC SDK**.
 * **Function:** Rigorously tests the **Optimal Allocation Strategy** and feeds results back to refine the predictive models, ensuring continuous improvement.
-
----
 
 ## 🚀 Key Takeaways
 
