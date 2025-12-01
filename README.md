@@ -25,45 +25,6 @@ This project will download and install additional third-party open source softwa
 ## Get Started
 ### System Requirements
 <details>
-<summary><b>Minimum Requirements</b></summary>
-
-- **System Architecture**:
-  - x86-64
-  - ARM64
-- **GPU**:
-  - Volta architecture or better (Compute Capability >=7.0)
-- **CPU**:
-  - 4+ cores
-- **System Memory**:
-  - 16+ GB RAM
-- **NVMe SSD Storage**:
-  - 100+ GB free space
-- **CUDA**:
-  - 12.0+
-- **Python**:
-  - 3.10.x - 3.13.x
-- **NVIDIA Drivers**:
-  - 525.60.13+ (Linux)
-  - 527.41+ (Windows)
-- **OS**:
-  - Linux distributions with glibc>=2.28 (released in August 2018):
-    - Arch Linux (minimum version 2018-08-02)
-    - Debian (minimum version 10.0)
-    - Fedora (minimum version 29)
-    - Linux Mint (minimum version 20)
-    - Rocky Linux / Alma Linux / RHEL (minimum version 8)
-    - Ubuntu (minimum version 20.04)
-  - Windows 11 with WSL2
-- **CUDA & NVIDIA Driver Combinations**:
-  - CUDA 12.0 with Driver 525.60.13+
-  - CUDA 12.2 with Driver 535.86.10+
-  - CUDA 12.5 with Driver 555.42.06+
-  - CUDA 12.9 with Driver 570.42.01+
-  - CUDA 13.0 with Driver 580.65.06+
-
-</details>
-
-<details>
 <summary><b>Recommended Requirements for Best Performance</b></summary>
 
 - **System Architecture**:
