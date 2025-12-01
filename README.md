@@ -1,24 +1,5 @@
 # Quantitative Portfolio Optimization developer example
 
-## Overview
-
-Quantitative Portfolio Optimization developer example is a GPU-accelerated solution designed to enable fast, scalable, and real-time portfolio optimization for financial institutions. Leveraging NVIDIA® cuOpt™ and RAPIDS, this developer example delivers near-real-time solutions for large-scale Mean-CVaR portfolio optimization problems, allowing enterprises to model advanced risk measures and optimize complex portfolios in accelerated time.
-
-Portfolio Optimization (PO) involves solving high-dimensional, non-linear numerical optimization problems that balance risk and return to meet investment goals. By introducing GPU-accelerated building blocks, this project significantly reduces computation times while improving solution quality, making sophisticated portfolio optimization accessible and practical for large-scale applications.
-
-<p align="center">
-    <img src="./docs/arch_diagram.png" alt="architecture diagram for PO" width="750"/>
-</p>
-
-### Key Features
-
-- **End-to-End GPU Workflow**: Accelerates the portfolio allocation problem using NVIDIA® cuOpt™, delivering near-real-time optimization.
-- **Flexible Financial Model Building**: Fully customizable constraints, including CVaR, leverage, budgets, turnover, and cardinality limits.
-- **Data-driven Risk Modeling**: Utilizes CVaR as a risk measure that is scenario-based and requires no assumptions about the asset return distribution.
-- **Full Pipeline Support**: Provides tools for performance evaluation, strategy backtesting, benchmarking, and visualization.
-- **Easy Benchmarking**: Streamlines the process of benchmarking against CP-based libraries and solvers.
-- **Scalable & Efficient**: Excels at solving large LP and MILP problems, leveraging NVIDIA libraries for pre- and post-optimization acceleration.
-
 ## Disclaimer
 This project will download and install additional third-party open source software projects. Review the license terms of these open source projects before use.
 
@@ -118,6 +99,43 @@ Explore the example notebooks in the [`notebooks/`](notebooks/) directory:
 - **`cvar_basic.ipynb`**: Complete walkthrough of Mean-CVaR portfolio optimization with GPU acceleration
 - **`efficient_frontier.ipynb`**: A quick tutorial on how to generate efficient frontier.
 - **`rebalancing_strategies.ipynb`** Introduction to dynamic re-balancing and examples of testing strategies
+  
+## Overview
+
+This developer example addresses the financial industry's trade-off between **computational speed** and **model complexity** in portfolio optimization. By leveraging **NVIDIA accelerated computing**, this solution transforms robust analysis (e.g., Mean-CVaR, large-scale simulations) from slow batch processing into a **fast, iterative workflow** for dynamic decision-making.
+
+---
+
+## 🏗️ Accelerated Architecture
+
+The end-to-end pipeline connects market data ingestion to optimal strategy backtesting using the NVIDIA CUDA ecosystem:
+
+### 1. Data Science & Scenario Generation
+* **Technology:** **CUDA-X Data Science** (cuDF, cuML)
+* **Function:** Accelerates data preprocessing and the learning/sampling of return distributions.
+* **Performance:** Achieves speedups of up to **100x** when generating scenarios.
+
+### 2. Mean-CVaR Optimization
+* **Technology:** **NVIDIA cuOpt** open-source solvers.
+* **Function:** Efficiently solves complex, scenario-based **Mean-CVaR portfolio optimization** problems.
+* **Performance:** Consistently outperforms state-of-the-art CPU-based solvers, with up to **160x speedups** in large-scale problems.
+
+### 3. Strategy Backtesting & Refinement
+* **Technology:** **CUDA-X Data Science** and **HPC SDK**.
+* **Function:** Rigorously tests the **Optimal Allocation Strategy** and feeds results back to refine the predictive models, ensuring continuous improvement.
+
+---
+
+## 🚀 Key Takeaways
+
+* **Speed-ups:** Up to **160x faster** optimization and **100x faster** scenario generation.
+* **Risk Modeling:** Enables the use of **Conditional Value-at-Risk (CVaR)** at production speed.
+* **Iterative Workflow:** Supports dynamic, fast, and data-driven optimization cycles.
+
+The speedups will scale 
+<p align="center">
+    <img src="./docs/arch_diagram.png" alt="architecture diagram for PO" width="750"/>
+</p>
 
 ## Contribution Guidelines
 
