@@ -361,7 +361,8 @@ class Portfolio:
         }
 
         colors = color_schemes.get(style, color_schemes["modern"])
-
+        plt.style.use("seaborn-v0_8-whitegrid")
+        
         # Create figure if needed
         if ax is None:
             fig, ax = plt.subplots(
@@ -534,14 +535,7 @@ class Portfolio:
                 )
 
         # Grid and styling - subtle grid similar to backtest
-        ax.grid(
-            True,
-            axis="x",
-            alpha=0.15,
-            color=colors["grid"],
-            linestyle="-",
-            linewidth=0.4,
-        )
+        ax.grid(True, alpha=0.3, color=colors["grid"])
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.spines["left"].set_color(colors["grid"])
