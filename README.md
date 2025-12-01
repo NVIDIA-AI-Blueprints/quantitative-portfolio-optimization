@@ -105,31 +105,30 @@ Explore the example notebooks in the [`notebooks/`](notebooks/) directory:
 
 This developer example addresses the financial industry's trade-off between **computational speed** and **model complexity** in portfolio optimization. By leveraging **NVIDIA accelerated computing**, this solution transforms robust analysis (e.g., Mean-CVaR, large-scale simulations) from slow batch processing into a **fast, iterative workflow** for dynamic decision-making.
 
-## 🏗️ Accelerated Architecture
+### Accelerated Architecture
 
 The end-to-end pipeline connects market data ingestion to optimal strategy backtesting using the NVIDIA CUDA ecosystem:
 
-### 1. Data Science & Scenario Generation
+#### 1. Data Science & Scenario Generation
 * **Technology:** **CUDA-X Data Science** (cuDF, cuML)
 * **Function:** Accelerates data preprocessing and the learning/sampling of return distributions.
 * **Performance:** Achieves speedups of up to **100x** when generating scenarios.
 
-### 2. Mean-CVaR Optimization
+#### 2. Mean-CVaR Optimization
 * **Technology:** **NVIDIA cuOpt** open-source solvers.
 * **Function:** Efficiently solves complex, scenario-based **Mean-CVaR portfolio optimization** problems.
 * **Performance:** Consistently outperforms state-of-the-art CPU-based solvers, with up to **160x speedups** in large-scale problems.
 
-### 3. Strategy Backtesting & Refinement
+#### 3. Strategy Backtesting & Refinement
 * **Technology:** **CUDA-X Data Science** and **HPC SDK**.
-* **Function:** Rigorously tests the **Optimal Allocation Strategy** and feeds results back to refine the predictive models, ensuring continuous improvement.
+* **Function:** Rigorously tests the **trading strategies** and provides insights into strategy fine-tuning. 
 
-## 🚀 Key Takeaways
+### Key Takeaways
 
 * **Speed-ups:** Up to **160x faster** optimization and **100x faster** scenario generation.
 * **Risk Modeling:** Enables the use of **Conditional Value-at-Risk (CVaR)** at production speed.
 * **Iterative Workflow:** Supports dynamic, fast, and data-driven optimization cycles.
 
-The speedups will scale 
 <p align="center">
     <img src="./docs/arch_diagram.png" alt="architecture diagram for PO" width="750"/>
 </p>
