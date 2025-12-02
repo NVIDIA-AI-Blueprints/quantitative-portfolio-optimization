@@ -345,7 +345,7 @@ def portfolio_plot_with_backtest(
     cut_off_date,
     backtest_plot_title,
     save_plot=False,
-    results_dir="resultsba",
+    results_dir="results",
 ):
     """
     Create side-by-side portfolio allocation and backtest performance plots.
