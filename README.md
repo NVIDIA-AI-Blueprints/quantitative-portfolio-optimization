@@ -135,12 +135,14 @@ Explore the example notebooks in the [`notebooks/`](notebooks/) directory:
 - **`efficient_frontier.ipynb`**: A quick tutorial on how to generate efficient frontier.
 - **`rebalancing_strategies.ipynb`** Introduction to dynamic re-balancing and examples of testing strategies
 
-### Deploy on Cloud
+### Deploy on Brev
 Deploy notebook using [Brev launchable](https://brev.nvidia.com/launchable/deploy?launchableID=env-360InRZzyHqDnJYQKIxaSggF8xI)
 
-#### [`launchable.ipynb`](launchable.ipynb) - Combined Notebook for Brev Launchable
+#### [`launchable-setup.ipynb`](./brev/launchable-setup.ipynb) 
+Start with this notebook - it handles the necessary repository cloning, environment configuration, and dependency installation required to run the Quantitative Portfolio Optimization developer example.
 
-This notebook combines `cvar_basic.ipynb`, `efficient_frontier.ipynb`, and `rebalancing_strategies.ipynb` into a single file. It is specifically designed for [Brev](https://brev.dev/) launchable environments, providing all portfolio optimization examples and workflows in one place for easy execution in cloud GPU environments.
+#### [`launchable-content.ipynb`](./brev/launchable-content.ipynb) 
+This notebook combines `cvar_basic.ipynb`, `efficient_frontier.ipynb`, and `rebalancing_strategies.ipynb` into a single file. It is specifically designed for [Brev](https://brev.nvidia.com/launchable/deploy?launchableID=env-360InRZzyHqDnJYQKIxaSggF8xI) launchable environments, providing all portfolio optimization examples and workflows in one place for easy execution in cloud GPU environments.
 
 
 ---
