@@ -76,7 +76,7 @@ To install dependencies on the NVIDIA PyTorch container:
 
 ```bash
 # Start the container
-docker run --gpus all -it --rm -v ./:/workspace/host --ipc=host -p 8888:8888 nvcr.io/nvidia/pytorch:25.08-py3
+docker run --gpus all -it --rm -v ./:/workspace/host --ipc=host -p 8888:8888 nvcr.io/nvidia/pytorch:25.10-py3
 
 # Clone the repository
 git clone https://github.com/NVIDIA-AI-Blueprints/quantitative-portfolio-optimization.git
@@ -128,12 +128,20 @@ To remove the kernel later (if needed):
 jupyter kernelspec uninstall portfolio-opt
 ```
 
-### Quick Start
+### Quick Start Locally
 
 Explore the example notebooks in the [`notebooks/`](notebooks/) directory:
 - **`cvar_basic.ipynb`**: Complete walkthrough of Mean-CVaR portfolio optimization with GPU acceleration
 - **`efficient_frontier.ipynb`**: A quick tutorial on how to generate efficient frontier.
 - **`rebalancing_strategies.ipynb`** Introduction to dynamic re-balancing and examples of testing strategies
+
+### Deploy on Cloud
+Deploy notebook using [Brev launchable](https://brev.nvidia.com/launchable/deploy?launchableID=env-360InRZzyHqDnJYQKIxaSggF8xI)
+
+#### [`launchable.ipynb`](launchable.ipynb) - Combined Notebook for Brev Launchable
+
+This notebook combines `cvar_basic.ipynb`, `efficient_frontier.ipynb`, and `rebalancing_strategies.ipynb` into a single file. It is specifically designed for [Brev](https://brev.dev/) launchable environments, providing all portfolio optimization examples and workflows in one place for easy execution in cloud GPU environments.
+
 
 ---
 ## Contribution Guidelines
