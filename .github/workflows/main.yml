@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   run-notebooks:
-    runs-on: arc-runner-set-oke-org-nv-ai-bp
+    runs-on: arc-runners-org-nvidia-ai-bp-1-gpu
     env:
       PYTHON_VERSION: 3.12
     steps:
@@ -36,7 +36,6 @@ jobs:
           echo "===================== System Info ====================="
           more /etc/os-release
           uname -a
-          nvidia-smi
           docker version 
 
       - name: Run container and execute notebooks
