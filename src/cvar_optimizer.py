@@ -22,14 +22,6 @@ from typing import Optional
 import cvxpy as cp
 import numpy as np
 import pandas as pd
-from cuopt.linear_programming.problem import (
-    CONTINUOUS,
-    INTEGER,
-    MAXIMIZE,
-    MINIMIZE,
-    Problem,
-)
-from cuopt.linear_programming.solver_settings import SolverSettings
 
 from . import base_optimizer
 from . import cvar_utils
@@ -553,6 +545,17 @@ class CVaR(base_optimizer.BaseOptimizer):
         timing_dict : dict
             Timing information for each setup loop in seconds
         """
+
+        #lazy imports
+        from cuopt.linear_programming.problem import (
+            CONTINUOUS,
+            INTEGER,
+            MAXIMIZE,
+            MINIMIZE,
+            Problem,
+        )
+        from cuopt.linear_programming.solver_settings import SolverSettings
+        
         num_assets = self.n_assets
         num_scen = len(self.data.p)
 

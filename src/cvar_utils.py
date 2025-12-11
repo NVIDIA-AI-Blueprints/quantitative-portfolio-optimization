@@ -70,23 +70,32 @@ def generate_samples_kde(
     kernel = kde_settings["kernel"]
 
     if kde_device == "CPU":
+        start_time = time.time()
+        #fit kde and sample from it
         kde = sklearn.neighbors.KernelDensity(kernel=kernel, bandwidth=bandwidth).fit(
             returns_data
         )
         new_samples = kde.sample(num_scen)
+        
+        end_time = time.time()
+        kde_time = end_time - start_time
+        
         if verbose:
-            print("KDE fitting on CPU")
+            print(f"KDE fit on CPU in {kde_time} seconds.")
 
     elif kde_device == "GPU":
         # Lazy import to avoid loading CUDA libraries on module import
         import cuml.neighbors
-
+        start_time = time.time()
         kde = cuml.neighbors.KernelDensity(kernel=kernel, bandwidth=bandwidth).fit(
             returns_data
         )
         new_samples = kde.sample(num_scen).get()  # convert to numpy array
+
+        end_time = time.time()
+        kde_time = end_time - start_time
         if verbose:
-            print("KDE fitting on GPU")
+            print(f"KDE fitting on GPU in {kde_time} seconds.")
 
     else:
         raise ValueError("Invalid Device: CPU or GPU!")
@@ -132,6 +141,7 @@ def generate_cvar_data(returns_dict: dict, scenario_generation_settings: dict):
     returns_data = returns_dict["returns"].to_numpy()
     num_scen = scenario_generation_settings["num_scen"]
     fit_type = scenario_generation_settings["fit_type"]
+    verbose = scenario_generation_settings.get("verbose") 
 
     if "kde_settings" in scenario_generation_settings:
         kde_settings = scenario_generation_settings["kde_settings"]
@@ -149,7 +159,7 @@ def generate_cvar_data(returns_dict: dict, scenario_generation_settings: dict):
             num_scen,
             returns_data,
             kde_settings=kde_settings,
-            verbose=scenario_generation_settings["verbose"],
+            verbose=verbose,
         )
         R = np.transpose(R_log)
         p = np.ones(num_scen) / num_scen  # probability of each scenario
