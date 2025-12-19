@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 from . import base_optimizer
-from .mean_var_parameters import MeanVarParameters
+from .mean_variance_parameters import MeanVarianceParameters
 from .portfolio import Portfolio
 from .settings import ApiSettings
 
@@ -41,12 +41,12 @@ risk-penalized loss).
 Key features
 ------------
 * Set up problem using different interfaces (CVXPY with bounds/parameters, cuOpt).
-* Build models with customizable constraints based on MeanVarParameters.
+* Build models with customizable constraints based on MeanVarianceParameters.
 * Print optimization results with detailed performance metrics and allocation.
 
 Public classes
 --------------
-``MeanVar``
+``MeanVariance``
     Main Mean-Variance portfolio optimizer class that supports multiple solver
     interfaces (CVXPY and cuOpt). Handles Mean-Variance optimization with
     customizable constraints including weight bounds, cash allocation, leverage
@@ -55,14 +55,14 @@ Public classes
 Usage Examples
 --------------
 Standard CVXPY solver (uses bounds by default):
-    >>> optimizer = MeanVar(returns_dict, mean_var_params)
+    >>> optimizer = MeanVariance(returns_dict, mean_variance_params)
     >>> result, portfolio = optimizer.solve_optimization_problem(
     ...     {"solver": cp.CLARABEL}
     ... )
 
 cuOpt GPU solver:
     >>> api_settings = ApiSettings(api="cuopt_python")
-    >>> optimizer = MeanVar(returns_dict, mean_var_params, api_settings=api_settings)
+    >>> optimizer = MeanVariance(returns_dict, mean_variance_params, api_settings=api_settings)
     >>> result, portfolio = optimizer.solve_optimization_problem({
     ...     "time_limit": 60
     ... })
@@ -73,14 +73,14 @@ CVXPY with parameters:
     ...     weight_constraints_type="parameter",
     ...     cash_constraints_type="parameter"
     ... )
-    >>> optimizer = MeanVar(returns_dict, mean_var_params, api_settings=api_settings)
+    >>> optimizer = MeanVariance(returns_dict, mean_variance_params, api_settings=api_settings)
     >>> result, portfolio = optimizer.solve_optimization_problem(
     ...     {"solver": cp.CLARABEL}
     ... )
 """
 
 
-class MeanVar(base_optimizer.BaseOptimizer):
+class MeanVariance(base_optimizer.BaseOptimizer):
     """
     Mean-Variance portfolio optimizer with multiple API support.
 
@@ -103,7 +103,7 @@ class MeanVar(base_optimizer.BaseOptimizer):
     def __init__(
         self,
         returns_dict: dict,
-        mean_var_params: MeanVarParameters,
+        mean_variance_params: MeanVarianceParameters,
         api_settings: Optional[ApiSettings] = None,
         existing_portfolio: Optional[Portfolio] = None,
     ):
@@ -113,7 +113,7 @@ class MeanVar(base_optimizer.BaseOptimizer):
         ----------
         returns_dict : dict
             Input data containing regime info, mean returns, and covariance matrix.
-        mean_var_params : MeanVarParameters
+        mean_variance_params : MeanVarianceParameters
             Constraint parameters and optimization settings (deep-copied).
         api_settings : ApiSettings, optional
             API configuration including solver choice and constraint types.
@@ -134,7 +134,7 @@ class MeanVar(base_optimizer.BaseOptimizer):
         self.mean = returns_dict["mean"]
         self.covariance = returns_dict["covariance"]
         self.existing_portfolio = existing_portfolio
-        self.params = self._store_mean_var_params(mean_var_params)
+        self.params = self._store_mean_variance_params(mean_variance_params)
 
         # Set up the optimization problem based on API choice
         self._setup_optimization_problem()
@@ -150,15 +150,14 @@ class MeanVar(base_optimizer.BaseOptimizer):
             "obj",
         ]
 
-    def _store_mean_var_params(self, mean_var_params: MeanVarParameters):
+    def _store_mean_variance_params(self, mean_variance_params: MeanVarianceParameters):
         """
         Store the Mean-Variance parameters in the optimizer.
 
         If w_min and w_max are input as floats, convert them to ndarrays
-        with the same value repeated for all assets. Otherwise, store
-        the ndarrays as is in the deepcopy.
+        with the same value repeated for all assets.
         """
-        params_copy = copy.deepcopy(mean_var_params)
+        params_copy = copy.deepcopy(mean_variance_params)
 
         params_copy.w_min = self._update_weight_constraints(params_copy.w_min)
         params_copy.w_max = self._update_weight_constraints(params_copy.w_max)
@@ -168,23 +167,16 @@ class MeanVar(base_optimizer.BaseOptimizer):
     def _setup_optimization_problem(self):
         """
         Set up the optimization problem based on the selected API choice.
-
-        This unified method handles setup for both CVXPY and cuOpt APIs:
-        - Times the setup process
-        - Scales risk aversion parameter
-        - Calls the appropriate API-specific setup method
         """
         set_up_start = time.time()
 
         if self.api_settings.scale_risk_aversion:
             self._scale_risk_aversion()
 
-        # Call the appropriate setup method based on API choice
         if self.api_choice == "cvxpy":
             self._setup_cvxpy_problem()
             self._assign_cvxpy_parameter_values()
 
-            # Save problem to pickle if requested
             pickle_path = self.api_settings.pickle_save_path
             if pickle_path is not None:
                 self._save_problem_pickle(pickle_path)
@@ -206,9 +198,7 @@ class MeanVar(base_optimizer.BaseOptimizer):
         Heuristically scale risk aversion parameter by the ratio of
         the maximum return over standard deviation for single-asset portfolios.
         """
-        # Calculate return/risk ratio for each asset
         std_devs = np.sqrt(np.diag(self.covariance))
-        # Avoid division by zero
         std_devs = np.maximum(std_devs, 1e-10)
         return_risk_ratios = self.mean / std_devs
 
@@ -224,37 +214,9 @@ class MeanVar(base_optimizer.BaseOptimizer):
 
         Supports the following types of problems:
             1. (QP) 'basic mean-variance': basic Markowitz problem
-                Minimize: lambda_risk * w^T Σ w - μ^T w
-                Subject to: sum{w} + c = 1,
-                            w_min_i <= w_i <= w_max_i,
-                            c_min <= c <= c_max,
-                            ||w||_1 <= L_tar.
-
             2. (QP) 'mean-variance with limit': hard limit on variance
-                Maximize: μ^T w
-                Subject to: w^T Σ w <= var_limit,
-                            sum{w} + c = 1,
-                            w_min_i <= w_i <= w_max_i,
-                            c_min <= c <= c_max,
-                            ||w||_1 <= L_tar.
-
-            3. (QP) 'mean-variance with turnover':
-                Minimize: lambda_risk * w^T Σ w - μ^T w
-                Subject to: sum{w} + c = 1,
-                            w_min_i <= w_i <= w_max_i,
-                            c_min <= c <= c_max,
-                            ||w||_1 <= L_tar,
-                            ||w - existing_portfolio||_1 <= T_tar.
-
-            4. (MIQP) 'mean-variance with cardinality':
-                Minimize: lambda_risk * w^T Σ w - μ^T w
-                Subject to: sum{w} + c = 1,
-                            w_min_i * y_i <= w_i <= w_max_i * y_i,
-                            c_min <= c <= c_max,
-                            ||w||_1 <= L_tar,
-                            sum{y_i} <= cardinality.
-
-        We can also combine the above constraints to form a more complex problem.
+            3. (QP) 'mean-variance with turnover'
+            4. (MIQP) 'mean-variance with cardinality' (not implemented)
         """
         num_assets = self.n_assets
 
@@ -309,37 +271,7 @@ class MeanVar(base_optimizer.BaseOptimizer):
 
         # Set up common constraints
         if self.params.cardinality is not None:
-            raise NotImplementedError("MIQP is not implemented yet.")
-            # self._problem_type = "MIQP"
-            # print(f"{'=' * 50}")
-            # print("MIXED-INTEGER QUADRATIC PROGRAMMING (MIQP) SETUP")
-            # print(f"{'=' * 50}")
-            # print(f"Cardinality Constraint: K ≤ {self.params.cardinality} assets")
-            # print(f"{'=' * 50}")
-            # y = cp.Variable(num_assets, boolean=True, name="cardinality")
-
-            # if self.api_settings.weight_constraints_type == "parameter":
-            #     constraints.extend(
-            #         [
-            #             cp.multiply(self.w_min_param, y) <= self.w,
-            #             self.w <= cp.multiply(self.w_max_param, y),
-            #         ]
-            #     )
-            # else:
-            #     constraints.extend(
-            #         [
-            #             cp.multiply(self.params.w_min, y) <= self.w,
-            #             self.w <= cp.multiply(self.params.w_max, y),
-            #         ]
-            #     )
-
-            # constraints.extend(
-            #     [
-            #         cp.sum(self.w) + self.c == 1,
-            #         cp.norm1(self.w) <= self.L_tar_param,
-            #         cp.sum(y) <= self.cardinality_param,
-            #     ]
-            # )
+            raise NotImplementedError("MIQP (cardinality constraint) is not implemented yet.")
         else:
             constraints.extend(
                 [
@@ -410,41 +342,34 @@ class MeanVar(base_optimizer.BaseOptimizer):
         """
         Set up Mean-Variance optimization problem using cuOpt Python API.
 
-        Creates cuOpt Problem instance with variables, constraints, and objective
-        for Mean-Variance portfolio optimization.
-
-        Note: cuOpt supports QP problems via SOCP reformulation or direct QP support.
+        Uses QuadraticExpression for the quadratic objective term w'Σw.
 
         Returns
         -------
         problem : cuopt Problem instance
-            cuOpt problem instance ready to solve
         variables : dict
-            Dictionary containing problem variables for result extraction
         timing_dict : dict
-            Timing information for each setup phase
         """
         from cuopt.linear_programming.problem import (
             CONTINUOUS,
-            INTEGER,
-            MAXIMIZE,
             MINIMIZE,
             Problem,
-            LinearExpression,
+            QuadraticExpression,
         )
 
         num_assets = self.n_assets
-        timing_dict = {}
+        timing = {}
 
-        start_time = time.time()
-        problem = Problem("Mean-Variance Portfolio Optimization")
-        timing_dict["problem_creation"] = time.time() - start_time
+        # Step 1: Create problem
+        t0 = time.time()
+        problem = Problem("Mean-Variance Portfolio QP")
+        timing["create_problem"] = time.time() - t0
 
         variables = {}
 
-        # Add portfolio weight variables
-        start_time = time.time()
-        variables["w"] = []
+        # Step 2a: Add weight variables w[i]
+        t0 = time.time()
+        w_vars = []
         for i in range(num_assets):
             w_var = problem.addVariable(
                 lb=float(self.params.w_min[i]),
@@ -452,113 +377,64 @@ class MeanVar(base_optimizer.BaseOptimizer):
                 vtype=CONTINUOUS,
                 name=f"w_{i}",
             )
-            variables["w"].append(w_var)
-        timing_dict["weight_variables"] = time.time() - start_time
+            w_vars.append(w_var)
+        variables["w"] = w_vars
+        timing["add_weight_vars"] = time.time() - t0
 
-        # Add cash variable
-        start_time = time.time()
+        # Step 2b: Add cash variable
+        t0 = time.time()
         variables["c"] = problem.addVariable(
             lb=float(self.params.c_min),
             ub=float(self.params.c_max),
             vtype=CONTINUOUS,
             name="cash",
         )
-        timing_dict["cash_variable"] = time.time() - start_time
+        timing["add_cash_var"] = time.time() - t0
 
-        # Add budget constraint: sum(w) + c = 1
-        start_time = time.time()
-        budget_vars = variables["w"] + [variables["c"]]
-        budget_coeffs = [1.0] * num_assets + [1.0]
-        budget_expr = LinearExpression(budget_vars, budget_coeffs, 0.0)
-        problem.addConstraint(budget_expr == 1.0, name="budget_constraint")
-        timing_dict["budget_constraint"] = time.time() - start_time
+        # Step 2c: Auxiliary variables for leverage (w_pos, w_neg)
+        t0 = time.time()
+        w_pos_vars = []
+        w_neg_vars = []
+        for i in range(num_assets):
+            w_pos = problem.addVariable(lb=0.0, vtype=CONTINUOUS, name=f"w_pos_{i}")
+            w_neg = problem.addVariable(lb=0.0, vtype=CONTINUOUS, name=f"w_neg_{i}")
+            w_pos_vars.append(w_pos)
+            w_neg_vars.append(w_neg)
+        variables["w_pos"] = w_pos_vars
+        variables["w_neg"] = w_neg_vars
+        timing["add_aux_vars"] = time.time() - t0
 
-        # Add leverage constraint
-        if self.params.L_tar < float("inf"):
-            start_time = time.time()
-            variables["w_pos"] = []
-            variables["w_neg"] = []
+        # Step 3a: Budget constraint: sum(w) + c = 1
+        t0 = time.time()
+        budget_expr = w_vars[0]
+        for i in range(1, num_assets):
+            budget_expr = budget_expr + w_vars[i]
+        budget_expr = budget_expr + variables["c"]
+        problem.addConstraint(budget_expr == 1.0, name="budget")
+        timing["budget_constraint"] = time.time() - t0
 
-            for i in range(num_assets):
-                w_pos = problem.addVariable(
-                    lb=0.0, vtype=CONTINUOUS, name=f"w_pos_{i}"
-                )
-                w_neg = problem.addVariable(
-                    lb=0.0, vtype=CONTINUOUS, name=f"w_neg_{i}"
-                )
-                variables["w_pos"].append(w_pos)
-                variables["w_neg"].append(w_neg)
-
-            for i in range(num_assets):
-                decomp_vars = [
-                    variables["w"][i],
-                    variables["w_pos"][i],
-                    variables["w_neg"][i],
-                ]
-                decomp_coeffs = [1.0, -1.0, 1.0]
-                decomp_expr = LinearExpression(decomp_vars, decomp_coeffs, 0.0)
-                problem.addConstraint(
-                    decomp_expr == 0.0, name=f"weight_decomposition_{i}"
-                )
-
-            leverage_vars = variables["w_pos"] + variables["w_neg"]
-            leverage_coeffs = [1.0] * (2 * num_assets)
-            leverage_expr = LinearExpression(leverage_vars, leverage_coeffs, 0.0)
+        # Step 3b: Decomposition constraints: w[i] = w_pos[i] - w_neg[i]
+        t0 = time.time()
+        for i in range(num_assets):
             problem.addConstraint(
-                leverage_expr <= self.params.L_tar, name="leverage_constraint"
+                w_vars[i] == w_pos_vars[i] - w_neg_vars[i], name=f"decomp_{i}"
             )
-            timing_dict["leverage_constraints"] = time.time() - start_time
-        else:
-            timing_dict["leverage_constraints"] = 0.0
+        timing["decomp_constraints"] = time.time() - t0
 
-        # Add cardinality constraints
-        if self.params.cardinality is not None:
-            start_time = time.time()
-            variables["y"] = []
+        # Step 3c: Leverage constraint: sum(w_pos + w_neg) <= L_tar
+        t0 = time.time()
+        leverage_expr = w_pos_vars[0] + w_neg_vars[0]
+        for i in range(1, num_assets):
+            leverage_expr = leverage_expr + w_pos_vars[i] + w_neg_vars[i]
+        problem.addConstraint(leverage_expr <= self.params.L_tar, name="leverage")
+        timing["leverage_constraint"] = time.time() - t0
 
-            for i in range(num_assets):
-                y_var = problem.addVariable(
-                    lb=0, ub=1, vtype=INTEGER, name=f"y_{i}"
-                )
-                variables["y"].append(y_var)
-
-            cardinality_coeffs = [1.0] * num_assets
-            cardinality_expr = LinearExpression(
-                variables["y"], cardinality_coeffs, 0.0
-            )
-            problem.addConstraint(
-                cardinality_expr <= self.params.cardinality,
-                name="cardinality_constraint",
-            )
-
-            for i in range(num_assets):
-                lower_vars = [variables["w"][i], variables["y"][i]]
-                lower_coeffs = [1.0, -float(self.params.w_min[i])]
-                lower_expr = LinearExpression(lower_vars, lower_coeffs, 0.0)
-                problem.addConstraint(
-                    lower_expr >= 0.0, name=f"cardinality_lower_{i}"
-                )
-
-                upper_vars = [variables["w"][i], variables["y"][i]]
-                upper_coeffs = [1.0, -float(self.params.w_max[i])]
-                upper_expr = LinearExpression(upper_vars, upper_coeffs, 0.0)
-                problem.addConstraint(
-                    upper_expr <= 0.0, name=f"cardinality_upper_{i}"
-                )
-
-            timing_dict["cardinality_constraints"] = time.time() - start_time
-            print(
-                f"Cardinality Constraint: K ≤ {self.params.cardinality} assets (MIQP)"
-            )
-        else:
-            timing_dict["cardinality_constraints"] = 0.0
-
-        # Add turnover constraint
+        # Step 3d: Turnover constraint (if applicable)
         if self.existing_portfolio is not None and self.params.T_tar is not None:
-            start_time = time.time()
+            t0 = time.time()
             w_prev = np.array(self.existing_portfolio.weights)
-            variables["turnover_pos"] = []
-            variables["turnover_neg"] = []
+            turnover_pos_vars = []
+            turnover_neg_vars = []
 
             for i in range(num_assets):
                 to_pos = problem.addVariable(
@@ -567,109 +443,98 @@ class MeanVar(base_optimizer.BaseOptimizer):
                 to_neg = problem.addVariable(
                     lb=0.0, vtype=CONTINUOUS, name=f"turnover_neg_{i}"
                 )
-                variables["turnover_pos"].append(to_pos)
-                variables["turnover_neg"].append(to_neg)
+                turnover_pos_vars.append(to_pos)
+                turnover_neg_vars.append(to_neg)
 
             for i in range(num_assets):
-                decomp_vars = [
-                    variables["w"][i],
-                    variables["turnover_pos"][i],
-                    variables["turnover_neg"][i],
-                ]
-                decomp_coeffs = [1.0, -1.0, 1.0]
-                decomp_expr = LinearExpression(decomp_vars, decomp_coeffs, 0.0)
                 problem.addConstraint(
-                    decomp_expr == float(w_prev[i]),
-                    name=f"turnover_decomposition_{i}",
+                    w_vars[i] - float(w_prev[i]) == turnover_pos_vars[i] - turnover_neg_vars[i],
+                    name=f"turnover_decomp_{i}",
                 )
 
-            turnover_vars = variables["turnover_pos"] + variables["turnover_neg"]
-            turnover_coeffs = [1.0] * (2 * num_assets)
-            turnover_expr = LinearExpression(turnover_vars, turnover_coeffs, 0.0)
-            problem.addConstraint(
-                turnover_expr <= self.params.T_tar, name="turnover_constraint"
-            )
-            timing_dict["turnover_constraints"] = time.time() - start_time
-        else:
-            timing_dict["turnover_constraints"] = 0.0
+            turnover_expr = turnover_pos_vars[0] + turnover_neg_vars[0]
+            for i in range(1, num_assets):
+                turnover_expr = turnover_expr + turnover_pos_vars[i] + turnover_neg_vars[i]
+            problem.addConstraint(turnover_expr <= self.params.T_tar, name="turnover")
 
-        # Add group constraints
+            variables["turnover_pos"] = turnover_pos_vars
+            variables["turnover_neg"] = turnover_neg_vars
+            timing["turnover_constraints"] = time.time() - t0
+        else:
+            timing["turnover_constraints"] = 0.0
+
+        # Step 3e: Group constraints (if applicable)
         if self.params.group_constraints is not None:
-            start_time = time.time()
+            t0 = time.time()
             for group_idx, group_constraint in enumerate(self.params.group_constraints):
                 tickers_index = [
                     self.tickers.index(ticker)
                     for ticker in group_constraint["tickers"]
                 ]
-
                 if len(tickers_index) > 0:
-                    group_vars = [variables["w"][i] for i in tickers_index]
-                    group_coeffs = [1.0] * len(tickers_index)
-                    group_sum_expr = LinearExpression(group_vars, group_coeffs, 0.0)
-
+                    group_expr = w_vars[tickers_index[0]]
+                    for i in tickers_index[1:]:
+                        group_expr = group_expr + w_vars[i]
                     problem.addConstraint(
-                        group_sum_expr <= group_constraint["weight_bounds"]["w_max"],
+                        group_expr <= group_constraint["weight_bounds"]["w_max"],
                         name=f"group_{group_idx}_upper",
                     )
                     problem.addConstraint(
-                        group_sum_expr >= group_constraint["weight_bounds"]["w_min"],
+                        group_expr >= group_constraint["weight_bounds"]["w_min"],
                         name=f"group_{group_idx}_lower",
                     )
-
-            timing_dict["group_constraints"] = time.time() - start_time
-            print(f"Group Constraints: {len(self.params.group_constraints)} groups")
+            timing["group_constraints"] = time.time() - t0
         else:
-            timing_dict["group_constraints"] = 0.0
+            timing["group_constraints"] = 0.0
 
-        # Set up objective function
-        # Note: For QP, cuOpt uses setQuadraticObjective or requires SOCP reformulation
-        start_time = time.time()
+        # Step 4: Build objective using QuadraticExpression
+        # Objective: minimize (1/2) * w'Σw - λ * μ'w
+        # cuOpt format: QuadraticExpression(quad_vars1, quad_vars2, quad_coeffs, lin_vars, lin_coeffs, constant)
 
-        # Build expected return expression
-        expected_return_coeffs = [float(self.mean[i]) for i in range(num_assets)]
-        expected_return_expr = LinearExpression(
-            variables["w"], expected_return_coeffs, 0.0
+        # 4a: Build linear terms: -risk_aversion * μ'w
+        t0 = time.time()
+        lin_vars = w_vars
+        lin_coeffs = [-float(self.params.risk_aversion) * float(self.mean[i]) for i in range(num_assets)]
+        timing["build_linear_arrays"] = time.time() - t0
+
+        # 4b: Build quadratic terms: (1/2) * w'Σw
+        t0 = time.time()
+        # quad_vars1: each var repeated n times consecutively
+        quad_vars1 = [w for w in w_vars for _ in range(num_assets)]
+        # quad_vars2: full list repeated n times
+        quad_vars2 = w_vars * num_assets
+        timing["build_quad_vars"] = time.time() - t0
+
+        # 4c: Build quad_coeffs from covariance matrix
+        t0 = time.time()
+        half_sigma = 0.5 * self.covariance
+        quad_coeffs = half_sigma.ravel().tolist()
+        timing["build_quad_coeffs"] = time.time() - t0
+
+        # 4d: Create QuadraticExpression in one shot
+        t0 = time.time()
+        objective_expr = QuadraticExpression(
+            quad_vars1, quad_vars2, quad_coeffs,
+            lin_vars, lin_coeffs, 0.0
         )
+        timing["create_quad_expr"] = time.time() - t0
 
-        # For Mean-Variance, we need quadratic objective: w^T Σ w
-        # cuOpt supports QP via setQuadraticObjective
-        if self.params.var_limit is None:
-            # Minimize: risk_aversion * w^T Σ w - μ^T w
-            # Linear part: -μ^T w
-            linear_coeffs = [-float(self.mean[i]) for i in range(num_assets)]
-            linear_expr = LinearExpression(variables["w"], linear_coeffs, 0.0)
-            problem.setObjective(linear_expr, sense=MINIMIZE)
+        # 4e: Set objective
+        t0 = time.time()
+        problem.setObjective(objective_expr, sense=MINIMIZE)
+        timing["set_objective"] = time.time() - t0
 
-            # Add quadratic part: risk_aversion * w^T Σ w
-            Q = self.params.risk_aversion * self.covariance
-            problem.setQuadraticObjective(variables["w"], Q)
-        else:
-            # Maximize: μ^T w subject to w^T Σ w <= var_limit
-            problem.setObjective(expected_return_expr, sense=MAXIMIZE)
-            # Add variance constraint as quadratic constraint
-            problem.addQuadraticConstraint(
-                variables["w"],
-                self.covariance,
-                self.params.var_limit,
-                name="variance_limit",
-            )
-
-        timing_dict["objective_setup"] = time.time() - start_time
-
+        # Print setup summary
         print(f"{'=' * 50}")
-        print("cuOpt MEAN-VARIANCE PROBLEM SETUP COMPLETED")
+        print("cuOpt MEAN-VARIANCE (QP) PROBLEM SETUP COMPLETED")
         print(f"{'=' * 50}")
-        print(f"Variables: {num_assets} weights + 1 cash")
-        if self.params.cardinality is not None:
-            print(f"           + {num_assets} cardinality (integer)")
-        if self.params.L_tar < float("inf"):
-            print(f"           + {2 * num_assets} leverage decomposition")
-        if self.existing_portfolio is not None and self.params.T_tar is not None:
-            print(f"           + {2 * num_assets} turnover decomposition")
+        print(f"Variables: {num_assets} weights + 1 cash + {2 * num_assets} leverage aux")
+        print(f"Quadratic terms: {len(quad_coeffs)}")
+        print(f"Linear terms: {len(lin_coeffs)}")
         print("Problem Type: QP (Quadratic Programming)")
         print(f"{'=' * 50}")
 
-        return problem, variables, timing_dict
+        return problem, variables, timing
 
     def _solve_cuopt_problem(self, solver_settings: dict = None):
         """
@@ -683,18 +548,16 @@ class MeanVar(base_optimizer.BaseOptimizer):
         Returns
         -------
         result_row : pd.Series
-            Performance metrics
         weights : np.ndarray
-            Optimal asset weights
         cash : float
-            Optimal cash allocation
         """
         from cuopt.linear_programming.solver_settings import SolverSettings
 
         settings = SolverSettings()
         if solver_settings:
             for param, value in solver_settings.items():
-                settings.set_parameter(param, value)
+                if param != "solver":  # Skip CVXPY-specific params
+                    settings.set_parameter(param, value)
 
         total_start = time.time()
         self._cuopt_problem.solve(settings)
@@ -729,7 +592,7 @@ class MeanVar(base_optimizer.BaseOptimizer):
             index=self._result_columns,
         )
 
-        print(f"cuOpt solution found in {solve_time:.2f} seconds")
+        print(f"cuOpt solution found in {solve_time:.4f} seconds")
         print(f"Status: {self._cuopt_problem.Status.name}")
         print(f"Objective value: {objective_value:.6f}")
 
@@ -747,11 +610,8 @@ class MeanVar(base_optimizer.BaseOptimizer):
         Returns
         -------
         result_row : pd.Series
-            Performance metrics
         weights : np.ndarray
-            Optimal asset weights
         cash : float
-            Optimal cash allocation
         """
         self.optimization_problem.solve(**solver_settings)
         weights = self.w.value
@@ -791,14 +651,7 @@ class MeanVar(base_optimizer.BaseOptimizer):
         return result_row, weights, cash
 
     def _save_problem_pickle(self, pickle_save_path: str):
-        """
-        Save the CVXPY optimization problem to a pickle file.
-
-        Parameters
-        ----------
-        pickle_save_path : str
-            Path where to save the pickle file
-        """
+        """Save the CVXPY optimization problem to a pickle file."""
         try:
             os.makedirs(os.path.dirname(pickle_save_path), exist_ok=True)
             with open(pickle_save_path, "wb") as f:
@@ -807,27 +660,14 @@ class MeanVar(base_optimizer.BaseOptimizer):
         except Exception as e:
             print(f"Warning: Failed to save Mean-Variance problem to pickle: {e}")
 
-    def _print_mean_var_results(
+    def _print_mean_variance_results(
         self,
         result_row: pd.Series,
         portfolio: Portfolio,
         time_results: dict,
         min_percentage: float = 1,
     ):
-        """
-        Display Mean-Variance optimization results and portfolio allocation.
-
-        Parameters
-        ----------
-        result_row : pd.Series
-            Optimization results
-        portfolio : Portfolio
-            Portfolio to display the readable allocation
-        time_results : dict
-            Additional timing breakdown
-        min_percentage : float, default 1
-            Only assets with absolute allocation >= min_percentage% will be shown
-        """
+        """Display Mean-Variance optimization results and portfolio allocation."""
         solver_name = result_row["solver"]
         solve_time = result_row["solve time"]
         expected_return = result_row["return"]
@@ -854,9 +694,7 @@ class MeanVar(base_optimizer.BaseOptimizer):
 
         print("\nPERFORMANCE METRICS")
         print(f"{'-' * 30}")
-        print(
-            f"Expected Return:     {expected_return:.6f} ({expected_return * 100:.4f}%)"
-        )
+        print(f"Expected Return:     {expected_return:.6f} ({expected_return * 100:.4f}%)")
         print(f"Variance:            {variance_value:.6f}")
         print(f"Std Deviation:       {np.sqrt(variance_value):.6f}")
         print(f"Objective Value:     {objective_value:.6f}")
@@ -924,21 +762,14 @@ class MeanVar(base_optimizer.BaseOptimizer):
         )
 
         if print_results:
-            self._print_mean_var_results(
+            self._print_mean_variance_results(
                 result_row, portfolio, time_results, min_percentage=1
             )
 
         return result_row, portfolio
 
     def _extract_problem_cone_data(self, problem_data_dir: str):
-        """
-        Extract the cone data from the problem and save to pickle file.
-
-        Parameters
-        ----------
-        problem_data_dir : str
-            Path where to save the pickle file
-        """
+        """Extract the cone data from the problem and save to pickle file."""
         data = self.optimization_problem.get_problem_data("SCS")
         P = data[0].get("P", None)
         q = data[0].get("c", None)
@@ -949,7 +780,7 @@ class MeanVar(base_optimizer.BaseOptimizer):
         os.makedirs(problem_data_dir, exist_ok=True)
 
         regime_name = getattr(self, "regime_name", "unknown")
-        filename = f"mean_var_{regime_name}.pkl"
+        filename = f"mean_variance_{regime_name}.pkl"
         pickle_file_path = os.path.join(problem_data_dir, filename)
 
         with open(pickle_file_path, "wb") as f:

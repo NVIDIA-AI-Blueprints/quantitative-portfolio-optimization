@@ -18,7 +18,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
-class MeanVarParameters(BaseModel):
+class MeanVarianceParameters(BaseModel):
     """
     User-tunable parameters and constraint limits for Mean-Variance optimization.
 
@@ -141,3 +141,4 @@ class MeanVarParameters(BaseModel):
     ) -> None:
         """Update the group constraints."""
         self.group_constraints = new_group_constraints
+
