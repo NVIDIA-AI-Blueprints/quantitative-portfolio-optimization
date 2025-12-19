@@ -13,13 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
-
 import numpy as np
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass
-class CvarData:
+class CvarData(BaseModel):
     """
     Data structure holding all scenario and statistical information required
     for CVaR optimization.
@@ -53,6 +51,8 @@ class CvarData:
     >>> print(data.p.sum())  # 1.0
 
     """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     mean: np.ndarray
     R: np.ndarray

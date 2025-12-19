@@ -15,7 +15,6 @@
 
 import os
 import time
-from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -27,53 +26,58 @@ from . import scenario_generation, utils
 from .cvar_data import CvarData
 from .cvar_parameters import CvarParameters
 from .portfolio import Portfolio
+from .settings import (
+    KDESettings,
+    ReturnsComputeSettings,
+    ScenarioGenerationSettings,
+)
 
 # Note: cvar_optimizer and cuml are imported lazily within functions to avoid
 # circular imports and loading CUDA libraries at module import time
 
+
 def generate_samples_kde(
     num_scen: int,
     returns_data: np.ndarray,
-    kde_settings: dict = None,
+    kde_settings: KDESettings = None,
     verbose: bool = False,
 ):
     """Fit KernelDensity to data and return new samples.
 
-    Args:
-        num_scen (int): Number of scenarios to generate.
-        returns_data (np.ndarray): Historical returns data for fitting.
-        kde_settings (dict, optional): Dictionary containing KDE settings. Defaults to None.
-        verbose (bool, optional): Whether to print verbose output. Defaults to False.
+    Parameters
+    ----------
+    num_scen : int
+        Number of scenarios to generate.
+    returns_data : np.ndarray
+        Historical returns data for fitting.
+    kde_settings : KDESettings, optional
+        KDE configuration including bandwidth, kernel, and device.
+        Uses defaults if not provided.
+    verbose : bool, optional
+        Whether to print timing information.
 
-    Returns:
-        np.ndarray: Array of generated samples with shape (num_scen, n_features).
+    Returns
+    -------
+    np.ndarray
+        Generated samples with shape (num_scen, n_features).
 
-    Raises:
-        ValueError: If device is not "CPU" or "GPU".
-
-    Example:
-        >>> import numpy as np
-        >>> # Historical returns for 3 assets over 100 days
-        >>> returns_data = np.random.randn(100, 3) * 0.02
-        >>> # Generate 50 new scenarios using KDE
-        >>> new_scenarios = generate_samples_kde(
-        ...     num_scen=50,
-        ...     returns_data=returns_data,
-        ...     bandwidth=0.01,
-        ...     kernel="gaussian",
-        ...     device="CPU"
-        ... )
-        >>> print(new_scenarios.shape)  # (50, 3)
+    Raises
+    ------
+    ValueError
+        If device is not "CPU" or "GPU".
     """
-    kde_device = kde_settings["device"]
-    bandwidth = kde_settings["bandwidth"]
-    kernel = kde_settings["kernel"]
+    if kde_settings is None:
+        kde_settings = KDESettings()
+
+    kde_device = kde_settings.device
+    bandwidth = kde_settings.bandwidth
+    kernel = kde_settings.kernel
 
     original_columns = returns_data.columns
     non_constant_cols = returns_data.columns[returns_data.nunique() > 1]
     constant_cols = returns_data.columns[returns_data.nunique() <= 1]
     constant_values = {col: returns_data[col].iloc[0] for col in constant_cols}
-    returns_data = returns_data[non_constant_cols]
+    returns_data = returns_data[non_constant_cols].to_numpy()
 
     if kde_device == "CPU":
         start_time = time.time()
@@ -115,50 +119,39 @@ def generate_samples_kde(
     return new_samples_df.to_numpy()
 
 
-def generate_cvar_data(returns_dict: dict, scenario_generation_settings: dict):
-    """Generate CvarData dataclass for CVaR optimization.
+def generate_cvar_data(
+    returns_dict: dict,
+    scenario_generation_settings: ScenarioGenerationSettings,
+):
+    """Generate CvarData for CVaR optimization.
 
-    This function creates the CvarData dataclass containing scenarios and probabilities
+    Creates the CvarData dataclass containing scenarios and probabilities
     based on the specified fit type (Gaussian, KDE, or historical).
 
-    Args:
-        returns_dict (dict): Dictionary containing returns data with mean,
-            covariance, and returns.
-        scenario_generation_settings (dict): Dictionary containing scenario generation settings including
-            fit_type and num_scen.
+    Parameters
+    ----------
+    returns_dict : dict
+        Dictionary containing returns data with mean, covariance, and returns.
+    scenario_generation_settings : ScenarioGenerationSettings
+        Configuration for scenario generation including number of scenarios,
+        fit type, and KDE settings.
 
-    Returns:
-        dict: Updated returns_dict with added 'cvar_data' containing
-            CvarData dataclass.
+    Returns
+    -------
+    dict
+        Updated returns_dict with 'cvar_data' containing CvarData instance.
 
-    Raises:
-        ValueError: If fit_type is not "gaussian", "kde", or "no_fit".
-
-    Example:
-        >>> import numpy as np
-        >>> # Prepare returns data
-        >>> returns_dict = {
-        ...     "mean": np.array([0.08, 0.10, 0.12]),
-        ...     "covariance": np.eye(3) * 0.01,
-        ...     "returns": np.random.randn(100, 3) * 0.02
-        ... }
-        >>> scenario_generation_settings = {"num_scen": 50, "fit_type": "gaussian"}
-        >>> result = generate_CVaR_data(returns_dict, scenario_generation_settings)
-        >>> print(type(result["cvar_data"]))
-        <class 'cufolio.cvar_data.CvarData'>
-        >>> print(result["cvar_data"].R.shape)  # (3, 50)
+    Raises
+    ------
+    ValueError
+        If fit_type is not "gaussian", "kde", or "no_fit".
     """
-
     return_mean = returns_dict["mean"]
-    returns_data = returns_dict["returns"].to_numpy()
-    num_scen = scenario_generation_settings.get("num_scen")
-    fit_type = scenario_generation_settings.get("fit_type")
-    verbose = scenario_generation_settings.get("verbose") 
-
-    if "kde_settings" in scenario_generation_settings:
-        kde_settings = scenario_generation_settings["kde_settings"]
-    else:
-        kde_settings = {"device": "CPU", "bandwidth": 0.05, "kernel": "gaussian"}
+    returns_data = returns_dict["returns"]
+    num_scen = scenario_generation_settings.num_scen
+    fit_type = scenario_generation_settings.fit_type
+    verbose = scenario_generation_settings.verbose
+    kde_settings = scenario_generation_settings.kde_settings
 
     if fit_type == "gaussian":  # Gaussian distribution
         covariance = returns_dict["covariance"]
@@ -193,8 +186,8 @@ def generate_cvar_data(returns_dict: dict, scenario_generation_settings: dict):
 
 def optimize_market_regimes(
     input_file_name: str,
-    returns_compute_settings: dict,
-    scenario_generation_settings: dict,
+    returns_compute_settings: ReturnsComputeSettings,
+    scenario_generation_settings: ScenarioGenerationSettings,
     all_regimes: dict,
     cvar_params: CvarParameters,
     solver_settings_list: list[dict],
@@ -208,44 +201,31 @@ def optimize_market_regimes(
     Tests multiple solvers across different market regimes and collects
     performance metrics.
 
-    Args:
-        input_file_name (str): Path to input data file.
-        returns_compute_settings (dict): Dictionary containing returns calculation settings.
-        scenario_generation_settings (dict): Dictionary containing scenario generation settings.
-        all_regimes (dict): Dictionary of regimes to test with format
-            {'regime_name': regime_range}.
-        cvar_params (CvarParameters): CVaR optimization parameters.
-        solver_settings_list (list[dict]): List of solver settings to test.
-            Each dict contains solver-specific settings
-            (e.g., {'solver': cp.CLARABEL, 'verbose': False}).
-        results_csv_file_name (str, optional): CSV filename to save results.
-            Defaults to None.
-        num_synthetic (int, optional): Number of synthetic data copies to generate.
-            0 means no generation. Defaults to 0.
-        print_results (bool, optional): Whether to print optimization results.
-            Defaults to True.
+    Parameters
+    ----------
+    input_file_name : str
+        Path to input data file.
+    returns_compute_settings : ReturnsComputeSettings
+        Configuration for computing returns from price data.
+    scenario_generation_settings : ScenarioGenerationSettings
+        Configuration for generating return scenarios.
+    all_regimes : dict
+        Dictionary of regimes to test with format {'regime_name': regime_range}.
+    cvar_params : CvarParameters
+        CVaR optimization parameters and constraints.
+    solver_settings_list : list[dict]
+        List of solver configurations to test.
+    results_csv_file_name : str, optional
+        CSV filename to save results.
+    num_synthetic : int, optional
+        Number of synthetic data copies to generate (0 = none).
+    print_results : bool, optional
+        Whether to print optimization results.
 
-    Returns:
-        pd.DataFrame: Results dataframe with columns:
-            - 'regime': Regime name
-            - '{solver_name}-obj': Objective value for each solver
-            - '{solver_name}-solve_time': Solve time for each solver
-            - '{solver_name}-optimal_portfolio': Optimal portfolio for each solver
-            - '{solver_name}-return': Expected return for each solver
-            - '{solver_name}-CVaR': CVaR value for each solver
-
-    Raises:
-        FileNotFoundError: If problem_from_folder doesn't exist.
-        ValueError: If solver_settings_list is empty.
-
-    Example:
-        >>> solver_settings_list = [
-        ...     {'solver': cp.CLARABEL, 'verbose': False},
-        ...     {'solver': cp.HIGHS, 'verbose': False},
-        ... ]
-        >>> results = optimize_market_regimes(
-        ...     'sp500.csv', 'LOG', all_regimes, cvar_params, solver_settings_list
-        ... )
+    Returns
+    -------
+    pd.DataFrame
+        Results dataframe with solver performance metrics per regime.
     """
     from . import cvar_optimizer  # Lazy import
 

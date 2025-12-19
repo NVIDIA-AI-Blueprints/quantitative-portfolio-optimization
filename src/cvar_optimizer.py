@@ -27,6 +27,7 @@ from . import base_optimizer
 from . import cvar_utils
 from .cvar_parameters import CvarParameters
 from .portfolio import Portfolio
+from .settings import ApiSettings
 
 """
 Module: CVaR Optimization
@@ -114,43 +115,30 @@ class CVaR(base_optimizer.BaseOptimizer):
         self,
         returns_dict: dict,
         cvar_params: CvarParameters,
-        api_settings: dict = None,
+        api_settings: Optional[ApiSettings] = None,
         existing_portfolio: Optional[Portfolio] = None,
     ):
         """Initialize CVaR optimizer with data and constraints.
 
         Parameters
         ----------
-        returns_dict: dict
+        returns_dict : dict
             Input data containing regime info and CvarData instance.
-        cvar_params: CvarParameters
+        cvar_params : CvarParameters
             Constraint parameters and optimization settings (deep-copied).
-        api_settings: dict, default None
-            API configuration dictionary. If None, defaults to CVXPY with bounds.
-            Structure: {
-                'api': str,  # "cvxpy" or "cuopt_python"
-                'weight_constraints_type': str,  # "parameter" or "bounds" (CVXPY only)
-                'cash_constraints_type': str,   # "parameter" or "bounds" (CVXPY only)
-                'pickle_save_path': str, optional  # Path to save CVXPY problem
-            }
-        existing_portfolio: Portfolio, optional
+        api_settings : ApiSettings, optional
+            API configuration including solver choice and constraint types.
+            Uses CVXPY with bounds if not provided.
+        existing_portfolio : Portfolio, optional
             An existing portfolio to measure the turnover from.
         """
         super().__init__(returns_dict, existing_portfolio, "CVaR")
 
-        # Set default api_settings if not provided
         if api_settings is None:
-            api_settings = {
-                "api": "cvxpy",
-                "weight_constraints_type": "bounds",
-                "cash_constraints_type": "bounds",
-                "scale_risk_aversion": True,
-            }
+            api_settings = ApiSettings()
 
-        # Validate and store API settings
-        self._validate_api_settings(api_settings)
         self.api_settings = api_settings
-        self.api_choice = api_settings["api"]
+        self.api_choice = api_settings.api
 
         self.regime_name = returns_dict["regime"]["name"]
         self.regime_range = returns_dict["regime"]["range"]
@@ -188,52 +176,6 @@ class CVaR(base_optimizer.BaseOptimizer):
 
         return params_copy
 
-    def _validate_api_settings(self, api_settings: dict):
-        """
-        Validate the API settings dictionary.
-
-        Parameters
-        ----------
-        api_settings: dict
-            API configuration dictionary to validate
-
-        Raises
-        ------
-        ValueError
-            If api_settings structure is invalid
-        """
-        if not isinstance(api_settings, dict):
-            raise ValueError("api_settings must be a dictionary")
-
-        # Validate API choice
-        valid_apis = ["cvxpy", "cuopt_python"]
-        api = api_settings.get("api")
-        if api not in valid_apis:
-            raise ValueError(f"Invalid API '{api}'. Must be one of {valid_apis}")
-
-        # Validate constraint types (only for CVXPY)
-        if api == "cvxpy":
-            valid_constraint_types = ["parameter", "bounds"]
-
-            weight_type = api_settings.get("weight_constraints_type", "bounds")
-            if weight_type not in valid_constraint_types:
-                raise ValueError(
-                    f"Invalid weight_constraints_type '{weight_type}'. "
-                    f"Must be one of {valid_constraint_types}"
-                )
-
-            cash_type = api_settings.get("cash_constraints_type", "bounds")
-            if cash_type not in valid_constraint_types:
-                raise ValueError(
-                    f"Invalid cash_constraints_type '{cash_type}'. "
-                    f"Must be one of {valid_constraint_types}"
-                )
-
-            # Validate pickle_save_path if provided
-            pickle_path = api_settings.get("pickle_save_path")
-            if pickle_path is not None and not isinstance(pickle_path, str):
-                raise ValueError("pickle_save_path must be a string if provided")
-
     def _setup_optimization_problem(self):
         """
         Set up the optimization problem based on the selected API choice.
@@ -245,7 +187,7 @@ class CVaR(base_optimizer.BaseOptimizer):
         """
         set_up_start = time.time()  # Record setup start time
 
-        if self.api_settings["scale_risk_aversion"]:
+        if self.api_settings.scale_risk_aversion:
             self._scale_risk_aversion()  # Adjust risk aversion parameter
 
         # Call the appropriate setup method based on API choice
@@ -254,7 +196,7 @@ class CVaR(base_optimizer.BaseOptimizer):
             self._assign_cvxpy_parameter_values()
 
             # Save problem to pickle if requested
-            pickle_path = self.api_settings.get("pickle_save_path")
+            pickle_path = self.api_settings.pickle_save_path
             if pickle_path is not None:
                 self._save_problem_pickle(pickle_path)
 
@@ -354,7 +296,7 @@ class CVaR(base_optimizer.BaseOptimizer):
         num_scen = len(self.data.p)
 
         # Create variables based on constraint type settings
-        if self.api_settings["weight_constraints_type"] == "bounds":
+        if self.api_settings.weight_constraints_type == "bounds":
             # Use variable bounds for weight constraints
             self.w = cp.Variable(
                 num_assets,
@@ -367,7 +309,7 @@ class CVaR(base_optimizer.BaseOptimizer):
             self.w_min_param = cp.Parameter(num_assets, name="w_min")
             self.w_max_param = cp.Parameter(num_assets, name="w_max")
 
-        if self.api_settings["cash_constraints_type"] == "bounds":
+        if self.api_settings.cash_constraints_type == "bounds":
             # Use variable bounds for cash constraints
             self.c = cp.Variable(
                 1, name="cash", bounds=[self.params.c_min, self.params.c_max]
@@ -396,14 +338,14 @@ class CVaR(base_optimizer.BaseOptimizer):
 
         # Add variable bounds constraints (only if using parameter constraints)
         constraints = []
-        if self.api_settings["weight_constraints_type"] == "parameter":
+        if self.api_settings.weight_constraints_type == "parameter":
             constraints.extend(
                 [
                     self.w_min_param <= self.w,
                     self.w <= self.w_max_param,
                 ]
             )
-        if self.api_settings["cash_constraints_type"] == "parameter":
+        if self.api_settings.cash_constraints_type == "parameter":
             constraints.extend(
                 [
                     self.c_min_param <= self.c,
@@ -422,7 +364,7 @@ class CVaR(base_optimizer.BaseOptimizer):
             y = cp.Variable(num_assets, boolean=True, name="cardinality")
 
             # Handle cardinality constraints based on weight constraint type
-            if self.api_settings["weight_constraints_type"] == "parameter":
+            if self.api_settings.weight_constraints_type == "parameter":
                 constraints.extend(
                     [
                         cp.multiply(self.w_min_param, y) <= self.w,
@@ -497,11 +439,11 @@ class CVaR(base_optimizer.BaseOptimizer):
         parameter values need to be updated without rebuilding the entire problem.
         """
         # Assign basic constraint parameters (only if they exist as parameters)
-        if self.api_settings["weight_constraints_type"] == "parameter":
+        if self.api_settings.weight_constraints_type == "parameter":
             self.w_min_param.value = self.params.w_min
             self.w_max_param.value = self.params.w_max
 
-        if self.api_settings["cash_constraints_type"] == "parameter":
+        if self.api_settings.cash_constraints_type == "parameter":
             self.c_min_param.value = self.params.c_min
             self.c_max_param.value = self.params.c_max
 
@@ -1141,7 +1083,7 @@ class CVaR(base_optimizer.BaseOptimizer):
 
         # Print results if requested
         if print_results:
-            self._print_CVaR_results(result_row, portfolio, time_results)
+            self._print_CVaR_results(result_row, portfolio, time_results, min_percentage=1)
 
         return result_row, portfolio
 

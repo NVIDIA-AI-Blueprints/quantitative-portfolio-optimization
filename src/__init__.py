@@ -19,5 +19,19 @@ version = "1.0.0"
 
 from .cvar_data import CvarData
 from .cvar_parameters import CvarParameters
+from .settings import (
+    ApiSettings,
+    KDESettings,
+    ReturnsComputeSettings,
+    ScenarioGenerationSettings,
+)
 
-__all__ = ["CvarData", "CvarParameters", "version"]
+__all__ = [
+    "CvarData",
+    "CvarParameters",
+    "ApiSettings",
+    "KDESettings",
+    "ReturnsComputeSettings",
+    "ScenarioGenerationSettings",
+    "version",
+]

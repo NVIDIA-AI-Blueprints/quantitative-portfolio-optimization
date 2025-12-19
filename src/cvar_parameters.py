@@ -12,14 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from dataclasses import dataclass
 from typing import Optional, Union
 
 import numpy as np
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
-@dataclass
-class CvarParameters:
+class CvarParameters(BaseModel):
     """
     User‑tunable parameters and constraint limits for CVaR optimization.
 
@@ -32,6 +31,8 @@ class CvarParameters:
     Optional constraints (T_tar, cvar_limit, cardinality) default to None when
     not specified.
     """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     # Weight / cash bounds
     w_min: Union[np.ndarray, dict, float] = 1.0  # Lower bound for each risky weight
@@ -52,43 +53,43 @@ class CvarParameters:
     #   'tickers': tickers
     #   'weight_bounds': {'w_min': w_min, 'w_max': w_max}}]
 
-    def __post_init__(self) -> None:
-        """Validate initial parameter values."""
-        self._validate_c_min(self.c_min)
-        self._validate_c_max(self.c_max)
-        self._validate_risk_aversion(self.risk_aversion)
-        self._validate_confidence(self.confidence)
-        if self.cardinality is not None:
-            self._validate_cardinality(self.cardinality)
-
-    # --- Validation helpers ---
-
-    @staticmethod
-    def _validate_c_min(value: float) -> None:
+    @field_validator("c_min")
+    @classmethod
+    def validate_c_min(cls, value: float) -> float:
         if value < 0:
             raise ValueError("Cash lower bound (c_min) must be non-negative.")
+        return value
 
-    @staticmethod
-    def _validate_c_max(value: float) -> None:
+    @field_validator("c_max")
+    @classmethod
+    def validate_c_max(cls, value: float) -> float:
         if not (0 <= value <= 1):
             raise ValueError("Cash upper bound (c_max) must be in [0, 1].")
+        return value
 
-    @staticmethod
-    def _validate_risk_aversion(value: float) -> None:
+    @field_validator("risk_aversion")
+    @classmethod
+    def validate_risk_aversion(cls, value: float) -> float:
         if value < 0:
             raise ValueError("Risk aversion must be non-negative.")
+        return value
 
-    @staticmethod
-    def _validate_confidence(value: float) -> None:
+    @field_validator("confidence")
+    @classmethod
+    def validate_confidence(cls, value: float) -> float:
         if not (0 < value <= 1):
             raise ValueError(
                 "Confidence level must be in (0, 1], e.g. 0.95 for 95% CVaR."
             )
+        return value
 
-    @staticmethod
-    def _validate_cardinality(value: int) -> None:
-        if not isinstance(value, int) or value <= 0:
-            raise ValueError("Cardinality must be a positive integer.")
+    @field_validator("cardinality")
+    @classmethod
+    def validate_cardinality(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None:
+            if not isinstance(value, int) or value <= 0:
+                raise ValueError("Cardinality must be a positive integer.")
+        return value
 
     def update_w_min(self, new_w_min: Union[np.ndarray, dict, float]):
         self.w_min = new_w_min
@@ -100,11 +101,13 @@ class CvarParameters:
             raise ValueError("Invalid upper bound for weights!")
 
     def update_c_min(self, new_c_min: float):
-        self._validate_c_min(new_c_min)
+        if new_c_min < 0:
+            raise ValueError("Cash lower bound (c_min) must be non-negative.")
         self.c_min = new_c_min
 
     def update_c_max(self, new_c_max: float):
-        self._validate_c_max(new_c_max)
+        if not (0 <= new_c_max <= 1):
+            raise ValueError("Cash upper bound (c_max) must be in [0, 1].")
         self.c_max = new_c_max
 
     def update_z_min(self, new_c_min: float):
@@ -124,13 +127,18 @@ class CvarParameters:
 
     def update_cardinality(self, new_cardinality: int):
         if new_cardinality is not None:
-            self._validate_cardinality(new_cardinality)
+            if not isinstance(new_cardinality, int) or new_cardinality <= 0:
+                raise ValueError("Cardinality must be a positive integer.")
         self.cardinality = new_cardinality
 
     def update_risk_aversion(self, new_risk_aversion: float):
-        self._validate_risk_aversion(new_risk_aversion)
+        if new_risk_aversion < 0:
+            raise ValueError("Risk aversion must be non-negative.")
         self.risk_aversion = new_risk_aversion
 
     def update_confidence(self, new_confidence: float):
-        self._validate_confidence(new_confidence)
+        if not (0 < new_confidence <= 1):
+            raise ValueError(
+                "Confidence level must be in (0, 1], e.g. 0.95 for 95% CVaR."
+            )
         self.confidence = new_confidence

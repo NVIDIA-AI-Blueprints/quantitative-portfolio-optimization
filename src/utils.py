@@ -17,12 +17,14 @@
 
 import os
 
-from typing import Optional, Union
+from typing import Union
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import yfinance as yf
+
+from .settings import ReturnsComputeSettings
 
 
 def get_input_data(filepath):
@@ -47,39 +49,34 @@ def get_input_data(filepath):
 def calculate_returns(
     input_dataset: Union[pd.DataFrame, str],
     regime_dict: dict = None,
-    returns_compute_settings: Union[dict, str] = None,
+    returns_compute_settings: ReturnsComputeSettings = None,
 ):
     """
-    preprocess the dat from a particular period of time.
-    Assuming the returns are log normally distributed, return the mean and
-    covariance of the log returns and the log returns
+    Preprocess price data and compute returns for a specified time period.
 
-    Parameters:
-    :input_dataset: pandas DataFrame or the path to the input dataset
-    :return_type: str, type of the returns. For example, "LOG" means log returns,
-            "PNL" means the dataset is already in the format of P&L data.
-            "LINEAR" means absolute returns.
-    :regime_dict: dict of the format {'name': , 'range':(start, end)}
-    :returns_compute_settings: Union[dict, str], dictionary containing returns calculation settings or the return type.
-            If a string is provided, it is the return type.
-            If a dictionary is provided, it contains the following keys:
-            - "return_type": str, type of the returns. For example, "LOG" means log returns,
-            - "freq": int, frequency of the returns. For example, freq = 1 means daily returns.
-            - "returns_compute_device": str, device to use for returns calculation. For example, "GPU" or "CPU".
-            - "verbose": bool, whether to print verbose output.
+    Calculates log returns (or other return types) and computes the mean
+    and covariance matrix for downstream portfolio optimization.
+
+    Parameters
+    ----------
+    input_dataset : pd.DataFrame or str
+        Price data as a DataFrame or path to the input dataset file.
+    regime_dict : dict, optional
+        Market regime specification with format {'name': str, 'range': (start, end)}.
+    returns_compute_settings : ReturnsComputeSettings, optional
+        Configuration for return calculation including return type, frequency,
+        and computation device. Uses defaults if not provided.
+
+    Returns
+    -------
+    dict
+        Dictionary containing computed returns, mean, covariance, and metadata.
     """
-    # set the default values for the returns calculation settings
-    if returns_compute_settings.get("returns_compute_device") is None:
-        returns_compute_settings["returns_compute_device"] = "CPU"
-    if returns_compute_settings.get("verbose") is None:
-        returns_compute_settings["verbose"] = False
-    if returns_compute_settings.get("freq") is None:
-        returns_compute_settings["freq"] = 1
-    if returns_compute_settings.get("return_type") is None:
-        returns_compute_settings["return_type"] = "LOG"
+    if returns_compute_settings is None:
+        returns_compute_settings = ReturnsComputeSettings()
 
-    return_type = returns_compute_settings["return_type"].upper()
-    freq = returns_compute_settings["freq"]
+    return_type = returns_compute_settings.return_type.upper()
+    freq = returns_compute_settings.freq
 
     if isinstance(input_dataset, str):
         input_data = get_input_data(input_dataset)

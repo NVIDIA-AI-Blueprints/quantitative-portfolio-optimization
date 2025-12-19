@@ -46,6 +46,7 @@ import seaborn as sns
 from matplotlib.lines import Line2D
 
 from . import backtest, cvar_optimizer, cvar_parameters, cvar_utils, portfolio, utils
+from .settings import ReturnsComputeSettings, ScenarioGenerationSettings
 
 
 class rebalance_portfolio:
@@ -60,10 +61,10 @@ class rebalance_portfolio:
     ----------
     dataset_directory : str
         Path to asset universe data.
-    returns_compute_settings : dict
-        Settings for computing returns.
-    scenario_generation_settings : dict
-        Settings for generating return scenarios.
+    returns_compute_settings : ReturnsComputeSettings
+        Configuration for computing returns from price data.
+    scenario_generation_settings : ScenarioGenerationSettings
+        Configuration for generating return scenarios.
     trading_start, trading_end : str
         Trading period boundaries in YYYY-MM-DD format.
     look_forward_window : int
@@ -83,8 +84,8 @@ class rebalance_portfolio:
     def __init__(
         self,
         dataset_directory: str,
-        returns_compute_settings: dict,
-        scenario_generation_settings: dict,
+        returns_compute_settings: ReturnsComputeSettings,
+        scenario_generation_settings: ScenarioGenerationSettings,
         trading_start: str,
         trading_end: str,
         look_forward_window: int,
