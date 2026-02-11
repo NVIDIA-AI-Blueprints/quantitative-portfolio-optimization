@@ -182,6 +182,12 @@ class MeanVariance(base_optimizer.BaseOptimizer):
                 self._save_problem_pickle(pickle_path)
 
         elif self.api_choice == "cuopt_python":
+            if self.params.var_limit is not None:
+                # CVXPY supports a quadratic constraint (variance <= var_limit),
+                # but cuOpt's QP interface here supports linear constraints only.
+                raise NotImplementedError(
+                    "cuOpt Python API does not support 'var_limit' (quadratic constraint). "
+                )
             (
                 self._cuopt_problem,
                 self._cuopt_variables,
@@ -493,16 +499,18 @@ class MeanVariance(base_optimizer.BaseOptimizer):
             timing["group_constraints"] = 0.0
 
         # Step 4: Build objective using QuadraticExpression
-        # Objective: minimize (1/2) * w'Σw - λ * μ'w
-        # cuOpt format: QuadraticExpression(quad_vars1, quad_vars2, quad_coeffs, lin_vars, lin_coeffs, constant)
+        #   minimize: risk_aversion * (w' Σ w) - (μ' w)
+        #
+        # cuOpt format:
+        #   QuadraticExpression(quad_vars1, quad_vars2, quad_coeffs, lin_vars, lin_coeffs, constant)
 
-        # 4a: Build linear terms: -risk_aversion * μ'w
+        # 4a: Build linear terms: -μ'w
         t0 = time.time()
         lin_vars = w_vars
-        lin_coeffs = [-float(self.params.risk_aversion) * float(self.mean[i]) for i in range(num_assets)]
+        lin_coeffs = [-float(self.mean[i]) for i in range(num_assets)]
         timing["build_linear_arrays"] = time.time() - t0
 
-        # 4b: Build quadratic terms: (1/2) * w'Σw
+        # 4b: Build quadratic terms for risk_aversion * (w' Σ w)
         t0 = time.time()
         # quad_vars1: each var repeated n times consecutively
         quad_vars1 = [w for w in w_vars for _ in range(num_assets)]
@@ -512,8 +520,8 @@ class MeanVariance(base_optimizer.BaseOptimizer):
 
         # 4c: Build quad_coeffs from covariance matrix
         t0 = time.time()
-        half_sigma = 0.5 * self.covariance
-        quad_coeffs = half_sigma.ravel().tolist()
+        q_matrix = self.params.risk_aversion * self.covariance
+        quad_coeffs = q_matrix.ravel().tolist()
         timing["build_quad_coeffs"] = time.time() - t0
 
         # 4d: Create QuadraticExpression in one shot

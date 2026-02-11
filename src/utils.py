@@ -446,59 +446,40 @@ def portfolio_plot_with_backtest(
     plt.show()
 
 
-def compare_results(gpu_results, cpu_results):
+def compare_results(*results_list):
     """
-    Compare and display results from GPU and CPU solvers in tabular format.
+    Compare and display results from multiple solvers in tabular format.
 
     Args:
-        gpu_results: Results from GPU solver
-        cpu_results: Results from CPU solver
+        *results_list: Result dictionaries from different solvers.
     """
-    print("\n" + "=" * 60)
-    print("SOLVER COMPARISON")
-    print("=" * 60)
-
-    # Collect all available results
-    solvers = []
-    if gpu_results is not None:
-        # Determine GPU solver name based on results structure or default to cuOpt
-        gpu_name = "cuOpt (GPU)"  # Default name for GPU results
-        solvers.append((gpu_name, gpu_results))
-    if cpu_results is not None:
-        solvers.append((f"{cpu_results['solver']} (CPU)", cpu_results))
-
-    if len(solvers) == 0:
-        print("No results available from any solver")
+    results = [r for r in results_list if r is not None]
+    if not results:
+        print("No results available")
         return
 
-    # Print header
-    print(
-        f"{'Solver':<15} {'Solve Time (s)':<15} {'Objective':<12} "
-        f"{'Return':<10} {'CVaR':<10}"
+    # Find common numeric keys, sorted: solve time, obj, then rest
+    common = set.intersection(*[set(r.keys()) for r in results])
+    keys = sorted(
+        [k for k in common if k != "solver" and isinstance(results[0].get(k), (int, float))],
+        key=lambda x: (0 if x == "solve time" else 1 if x == "obj" else 2, x)
     )
-    print("-" * 65)
 
-    # Print results for each solver
-    for solver_name, results in solvers:
-        solve_time = results.get("solve time", 0)
-        objective = results.get("obj", 0)
-        portfolio_return = results.get("return", 0)
-        cvar = results.get("CVaR", 0)
+    # Print table
+    print("\n" + "=" * 70)
+    print("SOLVER COMPARISON")
+    print("=" * 70)
+    print(f"{'Solver':<15}" + "".join(f" {k:<12}" for k in keys))
+    print("-" * 70)
+    for r in results:
+        print(f"{r.get('solver', 'Unknown'):<15}" + "".join(f" {(r.get(k) or 0):<12.6f}" for k in keys))
 
-        print(
-            f"{solver_name:<15} {solve_time:<15.4f} {objective:<12.6f} "
-            f"{portfolio_return:<10.6f} {cvar:<10.6f}"
-        )
-
-    # Calculate and display objective differences if multiple results available
-    if len(solvers) > 1:
+    # Objective differences
+    if len(results) > 1 and "obj" in keys:
         print("\nObjective Differences:")
-        for i in range(len(solvers)):
-            for j in range(i + 1, len(solvers)):
-                solver1_name, results1 = solvers[i]
-                solver2_name, results2 = solvers[j]
-                obj_diff = abs(results1.get("obj", 0) - results2.get("obj", 0))
-                print(f"{solver1_name} vs {solver2_name}: {obj_diff:.8f}")
+        for i, r1 in enumerate(results):
+            for r2 in results[i + 1:]:
+                print(f"  {r1.get('solver')} vs {r2.get('solver')}: {abs(r1.get('obj', 0) - r2.get('obj', 0)):.8f}")
 
     print()  # Add blank line for better readability
 
