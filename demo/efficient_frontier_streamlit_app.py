@@ -77,6 +77,11 @@ try:
     import cvxpy as cp
     from cufolio import cvar_optimizer, cvar_utils, utils
     from cufolio.cvar_parameters import CvarParameters
+    from cufolio.settings import (
+        KDESettings,
+        ReturnsComputeSettings,
+        ScenarioGenerationSettings,
+    )
 
     IMPORTS_OK = True
 except ImportError as e:
@@ -1545,18 +1550,19 @@ def main():
         if not dataset_path.exists():
             st.error(f"❌ Dataset not found: {dataset_path}")
             st.stop()
-        # Define settings for returns computation and scenario generation
-        returns_compute_settings = {'return_type': return_type, 'freq': 1}
-        scenario_generation_settings = {
-            'num_scen': num_scen,
-            'fit_type': 'kde',
-            'kde_settings': {
-                'bandwidth': 0.01,
-                'kernel': 'gaussian',
-                'device': 'GPU'
-            },
-            'verbose': False
-        }
+        returns_compute_settings = ReturnsComputeSettings(
+            return_type=return_type, freq=1
+        )
+        scenario_generation_settings = ScenarioGenerationSettings(
+            num_scen=num_scen,
+            fit_type='kde',
+            kde_settings=KDESettings(
+                bandwidth=0.01,
+                kernel='gaussian',
+                device='GPU'
+            ),
+            verbose=False
+        )
 
         # Run progressive optimizations
         with progress_container:

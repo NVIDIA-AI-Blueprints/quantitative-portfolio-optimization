@@ -28,9 +28,20 @@ sys.path.insert(0, str(workspace_root))
 cvar_dir = workspace_root  # For backward compatibility with path references
 
 try:
-    # Import cufolio package
-    from cufolio import backtest, cvar_optimizer, cvar_utils, utils
+    from cufolio import (
+        backtest,
+        cvar_optimizer,
+        cvar_utils,
+        mean_variance_optimizer,
+        utils,
+    )
     from cufolio.cvar_parameters import CvarParameters
+    from cufolio.mean_variance_parameters import MeanVarianceParameters
+    from cufolio.settings import (
+        KDESettings,
+        ReturnsComputeSettings,
+        ScenarioGenerationSettings,
+    )
 except ImportError as e:
     st.error(f"❌ Import Error: {e}")
     st.error("Please ensure cufolio package is installed (pip install -e .)")
@@ -38,7 +49,7 @@ except ImportError as e:
 
 # Page configuration
 st.set_page_config(
-    page_title="cuFOLIO Mean-CVaR Optimizer",
+    page_title="cuFOLIO Portfolio Optimizer",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -150,7 +161,6 @@ def create_portfolio_visualization(portfolio, title="Portfolio Allocation"):
         cutoff=1e-3,
         min_percentage=0.0,
         sort_by_weight=True,
-        show_percentages=True,
         show_plot=False,
     )
 
@@ -181,12 +191,12 @@ def run_solver_optimization(
                 st.error(f"❌ {solver_name} optimization failed: No solution returned")
                 return None, None, None
 
-            # Check for required keys
-            required_keys = ["return", "CVaR", "obj"]
-            missing_keys = [key for key in required_keys if key not in results]
-            if missing_keys:
-                st.error(f"❌ {solver_name} missing result keys: {missing_keys}")
-                return None, None, None
+        # Check for required keys (CVaR uses "CVaR", MV uses "variance")
+        required_keys = ["return", "obj"]
+        missing_keys = [key for key in required_keys if key not in results]
+        if missing_keys:
+            st.error(f"❌ {solver_name} missing result keys: {missing_keys}")
+            return None, None, None
 
             st.success(f"✅ {solver_name} completed in {solve_time:.2f}s")
             return results, portfolio, solve_time
@@ -219,7 +229,7 @@ def run_solver_optimization_thread(cvar_problem, solver_name, solver_settings):
             }
 
         # Check for required keys
-        required_keys = ["return", "CVaR", "obj"]
+        required_keys = ["return", "obj"]
         missing_keys = [key for key in required_keys if key not in results]
         if missing_keys:
             return {
@@ -378,7 +388,10 @@ def display_solver_results(
 
                 with metric_col1:
                     st.metric("Expected Return", f"{results['return']*100:.4f}%")
-                    st.metric("CVaR (95%)", f"{results['CVaR']*100:.4f}%")
+                    if "CVaR" in results:
+                        st.metric("CVaR (95%)", f"{results['CVaR']*100:.4f}%")
+                    elif "variance" in results:
+                        st.metric("Variance", f"{results['variance']:.6f}")
 
                 with metric_col2:
                     st.metric("Objective Value", f"{results['obj']:.6f}")
@@ -519,10 +532,11 @@ def run_backtest_analysis(
                 f"/home/scratch.phuo_wwfo/github/cufolio/data/stock_data/{dataset_name}.csv"
             )
 
-        # Calculate returns for backtest period
-        returns_compute_settings = {'return_type': return_type, 'freq': 1}
+        backtest_returns_settings = ReturnsComputeSettings(
+            return_type=return_type, freq=1
+        )
         backtest_returns_dict = utils.calculate_returns(
-            dataset_path, backtest_regime, returns_compute_settings
+            dataset_path, backtest_regime, backtest_returns_settings
         )
 
         # Create backtester
@@ -551,50 +565,48 @@ def run_backtest_analysis(
         return None, None
 
 
-def format_optimization_results(results, portfolio, cvar_optimizer, solve_time):
-    """Format optimization results using CVaR optimizer's structure"""
-    # Extract results like the built-in method does (using correct column names)
+def format_optimization_results(results, portfolio, optimizer, solve_time):
+    """Format optimization results for both CVaR and MV optimizers."""
     solver_name = results.get("solver", "Unknown")
     expected_return = results["return"]
-    cvar_value = results["CVaR"]
     objective_value = results["obj"]
 
-    # Problem Configuration
     config_data = {
         "Solver": solver_name,
-        "Regime": cvar_optimizer.regime_name,
-        "Time Period": f"{cvar_optimizer.regime_range[0]} to {cvar_optimizer.regime_range[1]}",
-        "Scenarios": f"{cvar_optimizer.params.num_scen:,}",
-        "Assets": cvar_optimizer.n_assets,
-        "Confidence Level": f"{cvar_optimizer.params.confidence:.1%}",
+        "Regime": optimizer.regime_name,
+        "Time Period": f"{optimizer.regime_range[0]} to {optimizer.regime_range[1]}",
+        "Assets": optimizer.n_assets,
     }
 
-    # Add optional constraints if present
-    if cvar_optimizer.params.cardinality is not None:
-        config_data["Cardinality Limit"] = f"{cvar_optimizer.params.cardinality} assets"
-    if cvar_optimizer.params.cvar_limit is not None:
-        config_data["CVaR Hard Limit"] = f"{cvar_optimizer.params.cvar_limit:.4f}"
-    if (
-        cvar_optimizer.existing_portfolio is not None
-        and cvar_optimizer.params.T_tar is not None
-    ):
-        config_data["Turnover Constraint"] = f"{cvar_optimizer.params.T_tar:.3f}"
+    if hasattr(optimizer.params, "confidence"):
+        config_data["Confidence Level"] = f"{optimizer.params.confidence:.1%}"
+    if hasattr(optimizer, "data") and hasattr(optimizer.data, "p"):
+        config_data["Scenarios"] = f"{len(optimizer.data.p):,}"
 
-    # Performance Metrics
+    if optimizer.params.cardinality is not None:
+        config_data["Cardinality Limit"] = f"{optimizer.params.cardinality} assets"
+    if hasattr(optimizer.params, "cvar_limit") and optimizer.params.cvar_limit is not None:
+        config_data["CVaR Hard Limit"] = f"{optimizer.params.cvar_limit:.4f}"
+    if hasattr(optimizer.params, "var_limit") and optimizer.params.var_limit is not None:
+        config_data["Variance Hard Limit"] = f"{optimizer.params.var_limit:.6f}"
+    if optimizer.existing_portfolio is not None and optimizer.params.T_tar is not None:
+        config_data["Turnover Constraint"] = f"{optimizer.params.T_tar:.3f}"
+
     performance_data = {
         "Expected Return": f"{expected_return:.6f} ({expected_return*100:.4f}%)",
-        "CVaR (95%)": f"{cvar_value:.6f} ({cvar_value*100:.4f}%)",
-        "Objective Value": f"{objective_value:.6f}",
     }
+    if "CVaR" in results:
+        cvar_value = results["CVaR"]
+        performance_data["CVaR (95%)"] = f"{cvar_value:.6f} ({cvar_value*100:.4f}%)"
+    if "variance" in results:
+        var_value = results["variance"]
+        performance_data["Variance"] = f"{var_value:.6f}"
+        performance_data["Std Deviation"] = f"{var_value**0.5:.6f}"
+    performance_data["Objective Value"] = f"{objective_value:.6f}"
 
-    # Timing Information
     timing_data = {"Solve Time": f"{solve_time:.4f} seconds"}
-
-    # Add setup time if available
-    if hasattr(cvar_optimizer, "cuopt_set_up_time") and solver_name.lower() == "cuopt":
-        timing_data["Setup Time"] = f"{cvar_optimizer.cuopt_set_up_time:.4f} seconds"
-    elif hasattr(cvar_optimizer, "set_up_time"):
-        timing_data["Setup Time"] = f"{cvar_optimizer.set_up_time:.4f} seconds"
+    if hasattr(optimizer, "set_up_time"):
+        timing_data["Setup Time"] = f"{optimizer.set_up_time:.4f} seconds"
 
     return {
         "config": config_data,
@@ -605,11 +617,19 @@ def format_optimization_results(results, portfolio, cvar_optimizer, solve_time):
 
 # Main Streamlit App
 def main():
-    st.title("📈 CVaR Portfolio Optimizer")
+    st.title("📈 Portfolio Optimizer")
 
     # Sidebar for parameters
     with st.sidebar:
         st.header("🔧 Optimization Parameters")
+
+        # Optimization method selection
+        opt_method = st.selectbox(
+            "Optimization Method",
+            ["Mean-CVaR", "Mean-Variance"],
+            index=0,
+            help="CVaR uses scenario-based risk; Mean-Variance uses covariance-based risk",
+        )
 
         # Dataset selection
         st.subheader("📊 Dataset Configuration")
@@ -621,7 +641,8 @@ def main():
         )
 
         return_type = st.selectbox("Return Type", ["LOG", "SIMPLE"], index=0)
-        kde_device = st.selectbox("Computation Device", ["GPU", "CPU"], index=0)
+        if opt_method == "Mean-CVaR":
+            kde_device = st.selectbox("KDE Device", ["GPU", "CPU"], index=0)
 
         # Date range
         col1, col2 = st.columns(2)
@@ -773,10 +794,24 @@ def main():
         # Risk parameters
         st.subheader("⚖️ Risk Parameters")
         risk_aversion = st.slider("Risk Aversion", 0.1, 5.0, 1.0, 0.1)
-        confidence = st.slider("CVaR Confidence Level", 0.90, 0.99, 0.95, 0.01)
-        num_scen = st.selectbox(
-            "Number of Scenarios", [1000, 5000, 10000, 20000], index=2
-        )
+
+        if opt_method == "Mean-CVaR":
+            confidence = st.slider("CVaR Confidence Level", 0.90, 0.99, 0.95, 0.01)
+            num_scen = st.selectbox(
+                "Number of Scenarios", [1000, 5000, 10000, 20000], index=2
+            )
+        else:
+            enable_var_limit = st.checkbox("Enable Variance Hard Limit", value=False)
+            var_limit = None
+            if enable_var_limit:
+                var_limit = st.number_input(
+                    "Variance Limit",
+                    value=0.01,
+                    min_value=0.0001,
+                    max_value=1.0,
+                    step=0.001,
+                    format="%.4f",
+                )
 
         # Solver settings
         st.subheader("🔧 Solver Settings")
@@ -912,56 +947,57 @@ def main():
             try:
                 # Update progress
                 progress_bar.progress(10)
-                st.info("📊 Setting up CVaR parameters...")
+                st.info(f"📊 Setting up {opt_method} parameters...")
 
-                # Create CVaR parameters with error handling
+                # Create parameters based on optimization method
                 try:
-                    cvar_params = CvarParameters(
-                        w_min=w_min_dict,
-                        w_max=w_max_dict,
-                        c_min=c_min,
-                        c_max=c_max,
-                        L_tar=L_tar,
-                        T_tar=None,
-                        cvar_limit=None,
-                        cardinality=cardinality,
-                        risk_aversion=risk_aversion,
-                        confidence=confidence,
-                    )
-                    # st.success("✅ CVaR parameters created successfully")
+                    if opt_method == "Mean-CVaR":
+                        opt_params = CvarParameters(
+                            w_min=w_min_dict,
+                            w_max=w_max_dict,
+                            c_min=c_min,
+                            c_max=c_max,
+                            L_tar=L_tar,
+                            T_tar=None,
+                            cvar_limit=None,
+                            cardinality=cardinality,
+                            risk_aversion=risk_aversion,
+                            confidence=confidence,
+                        )
+                    else:
+                        opt_params = MeanVarianceParameters(
+                            w_min=w_min_dict,
+                            w_max=w_max_dict,
+                            c_min=c_min,
+                            c_max=c_max,
+                            L_tar=L_tar,
+                            T_tar=None,
+                            var_limit=var_limit if enable_var_limit else None,
+                            cardinality=cardinality,
+                            risk_aversion=risk_aversion,
+                        )
                 except Exception as e:
-                    st.error(f"❌ Error creating CVaR parameters: {str(e)}")
+                    st.error(f"❌ Error creating parameters: {str(e)}")
                     st.stop()
 
                 progress_bar.progress(20)
                 st.info("📈 Loading data and calculating returns...")
 
-                # Set up data path with error handling
+                # Set up data path
                 try:
                     data_path = workspace_root / "data" / "stock_data" / f"{dataset_name}.csv"
-
-                    # Try relative path first
                     if not data_path.exists():
-                        # Fallback: try absolute path
                         data_path = Path(
                             f"/home/scratch.phuo_wwfo/github/cufolio/data/stock_data/{dataset_name}.csv"
                         )
-
                     if not data_path.exists():
                         st.error(f"❌ Dataset not found: {dataset_name}.csv")
-                        st.error(f"Tried paths:")
-                        st.error(
-                            f"1. {workspace_root / 'data' / 'stock_data' / f'{dataset_name}.csv'}"
-                        )
-                        st.error(f"2. {data_path}")
                         st.stop()
-
-                    # st.success(f"✅ Dataset found: {dataset_name}.csv at {data_path}")
                 except Exception as e:
                     st.error(f"❌ Error setting up data path: {str(e)}")
                     st.stop()
 
-                # Create regime dict and calculate returns
+                # Calculate returns
                 try:
                     regime_dict = {
                         "name": "streamlit_optimization",
@@ -970,41 +1006,37 @@ def main():
                             end_date.strftime("%Y-%m-%d"),
                         ),
                     }
-
                     st.info(
                         f"📅 Analyzing period: {regime_dict['range'][0]} to {regime_dict['range'][1]}"
                     )
 
-                    # Calculate returns with timeout protection
-                    # Step 1: Compute returns from price data
-                    returns_compute_settings = {'return_type': return_type, 'freq': 1}
+                    returns_compute_settings = ReturnsComputeSettings(
+                        return_type=return_type, freq=1
+                    )
                     returns_dict = utils.calculate_returns(
                         str(data_path),
                         regime_dict,
                         returns_compute_settings
                     )
 
-                    # Step 2: Generate return scenarios
-                    scenario_generation_settings = {
-                        'num_scen': num_scen,
-                        'fit_type': 'kde',
-                        'kde_settings': {
-                            'bandwidth': 0.01,
-                            'kernel': 'gaussian',
-                            'device': 'GPU'
-                        },
-                        'verbose': False
-                    }
-
-                    returns_dict = cvar_utils.generate_cvar_data(
-                        returns_dict,
-                        scenario_generation_settings
-                    )
-                    # st.success("✅ Returns calculated successfully")
+                    if opt_method == "Mean-CVaR":
+                        scenario_generation_settings = ScenarioGenerationSettings(
+                            num_scen=num_scen,
+                            fit_type='kde',
+                            kde_settings=KDESettings(
+                                bandwidth=0.01,
+                                kernel='gaussian',
+                                device=kde_device
+                            ),
+                            verbose=False
+                        )
+                        returns_dict = cvar_utils.generate_cvar_data(
+                            returns_dict,
+                            scenario_generation_settings
+                        )
                 except Exception as e:
                     st.error(f"❌ Error calculating returns: {str(e)}")
                     import traceback
-
                     st.text("Debug trace:")
                     st.code(traceback.format_exc())
                     st.stop()
@@ -1012,17 +1044,21 @@ def main():
                 progress_bar.progress(40)
                 st.info("🔧 Setting up optimization problem...")
 
-                # Create CVaR problem with error handling
+                # Create optimizer
                 try:
-                    cvar_problem = cvar_optimizer.CVaR(
-                        returns_dict=returns_dict,
-                        cvar_params=cvar_params,
-                    )
-                    # st.success("✅ CVaR optimization problem created")
+                    if opt_method == "Mean-CVaR":
+                        optimizer_problem = cvar_optimizer.CVaR(
+                            returns_dict=returns_dict,
+                            cvar_params=opt_params,
+                        )
+                    else:
+                        optimizer_problem = mean_variance_optimizer.MeanVariance(
+                            returns_dict=returns_dict,
+                            mean_variance_params=opt_params,
+                        )
                 except Exception as e:
-                    st.error(f"❌ Error creating CVaR problem: {str(e)}")
+                    st.error(f"❌ Error creating optimization problem: {str(e)}")
                     import traceback
-
                     st.text("Debug trace:")
                     st.code(traceback.format_exc())
                     st.stop()
@@ -1035,7 +1071,6 @@ def main():
                 # Setup solver configurations
                 gpu_settings = None
 
-                # Map CPU solver choice to CVXPY solver
                 cpu_solver_map = {
                     "HIGHS": cp.HIGHS,
                     "CLARABEL": cp.CLARABEL,
@@ -1049,10 +1084,8 @@ def main():
                     "verbose": False,
                 }
 
-                # Check if GPU solver is available
                 try:
                     import cuopt
-
                     gpu_settings = {"solver": cp.CUOPT, "verbose": False}
                     st.info("🚀 GPU solver (cuOpt) available")
                 except ImportError:
@@ -1062,10 +1095,9 @@ def main():
 
                 progress_bar.progress(60)
 
-                # Run GPU and CPU solvers in parallel
                 st.info("🚀 Running GPU and CPU optimizations simultaneously...")
                 parallel_results = run_parallel_optimizations(
-                    cvar_problem,
+                    optimizer_problem,
                     gpu_settings,
                     cpu_settings,
                     cpu_solver_choice,
@@ -1128,7 +1160,7 @@ def main():
                     display_solver_results(
                         gpu_results,
                         gpu_portfolio,
-                        cvar_problem,
+                        optimizer_problem,
                         gpu_solve_time,
                         "GPU",
                         gpu_portfolio_placeholder,
@@ -1147,7 +1179,7 @@ def main():
                     display_solver_results(
                         cpu_results,
                         cpu_portfolio,
-                        cvar_problem,
+                        optimizer_problem,
                         cpu_solve_time,
                         "CPU",
                         cpu_portfolio_placeholder,

@@ -69,6 +69,11 @@ try:
     import cvxpy as cp
     from cufolio import backtest, cvar_optimizer, cvar_utils, rebalance, utils
     from cufolio.cvar_parameters import CvarParameters
+    from cufolio.settings import (
+        KDESettings,
+        ReturnsComputeSettings,
+        ScenarioGenerationSettings,
+    )
 
     IMPORTS_OK = True
 except Exception as e:
@@ -1204,6 +1209,7 @@ def main():
             ["kde", "empirical"],
             index=0 if DefaultValues.FIT_TYPE == "kde" else 1,
         )
+        kde_device = st.selectbox("KDE Device", ["GPU", "CPU"], index=1)
 
         # Rebalancing Strategy
         st.subheader("🧭 Rebalancing Strategy")
@@ -1456,18 +1462,19 @@ def main():
             st.error(f"❌ Dataset not found: {dataset_path}")
             st.stop()
 
-        # Define settings for returns computation and scenario generation
-        returns_compute_settings = {'return_type': return_type, 'freq': 1}
-        scenario_generation_settings = {
-            'num_scen': num_scen,
-            'fit_type': 'kde',
-            'kde_settings': {
-                'bandwidth': 0.01,
-                'kernel': 'gaussian',
-                'device': 'GPU'
-            },
-            'verbose': False
-        }
+        returns_compute_settings = ReturnsComputeSettings(
+            return_type=return_type, freq=1
+        )
+        scenario_generation_settings = ScenarioGenerationSettings(
+            num_scen=num_scen,
+            fit_type='kde',
+            kde_settings=KDESettings(
+                bandwidth=0.01,
+                kernel='gaussian',
+                device=kde_device
+            ),
+            verbose=False
+        )
 
         # Prepare parameters
         trading_range = (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
