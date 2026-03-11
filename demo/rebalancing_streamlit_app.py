@@ -724,6 +724,47 @@ def create_rebalancing_progressive(
             backtest_date = r.dates_range[backtest_idx]
             time.sleep(PerformanceParams.UI_UPDATE_DELAY)
 
+        # Backtest the final segment (remaining days after the last full window)
+        remaining_days = len(r.dates_range) - backtest_idx
+        if remaining_days > 1:
+            try:
+                bt_start = backtest_date.strftime("%Y-%m-%d")
+                bt_end = r.dates_range[-1].strftime("%Y-%m-%d")
+                bt_regime = {"name": "backtest_final", "range": (bt_start, bt_end)}
+                test_returns = utils.calculate_returns(
+                    dataset_path, bt_regime, returns_compute_settings
+                )
+                bt = backtest.portfolio_backtester(
+                    current_portfolio, test_returns, benchmark_portfolios=None
+                )
+                bt_result = bt.backtest_single_portfolio(current_portfolio)
+                cum_ret_values = (
+                    bt_result["cumulative returns"].values[0]
+                    if hasattr(bt_result["cumulative returns"], "values")
+                    else bt_result["cumulative returns"]
+                )
+                cur_cum = cum_ret_values * portfolio_value
+                cumulative_values = np.concatenate((cumulative_values, cur_cum))
+                cumulative_dates.extend(bt._dates)
+
+                # Redraw the plot with the final segment included
+                with _matplotlib_lock:
+                    cum_series_final = pd.Series(
+                        cumulative_values,
+                        index=pd.to_datetime(cumulative_dates),
+                    )
+                    ax.plot(
+                        cum_series_final.index,
+                        cum_series_final.values,
+                        linewidth=3,
+                        color=colors["frontier"],
+                        alpha=0.9,
+                        zorder=3,
+                    )
+                    _set_axis_limits(ax, cum_series_final, bh_series)
+            except Exception:
+                pass
+
         # Finalize
         results_df.index.name = "date"
         cum_series = pd.Series(
@@ -1167,25 +1208,19 @@ def main():
 
         # Portfolio Constraints (user-friendly names with technical help)
         st.subheader("💼 Portfolio Allocation")
-        w_min = st.slider(
-            "Min Allocation per Asset",
-            -0.5, 0.5, float(DefaultValues.W_MIN), 0.05,
-            help="Minimum weight (w_min) — minimum fraction of wealth allocated to any single asset. Negative values allow short selling.",
+        w_min, w_max = st.slider(
+            "Allocation Range per Asset",
+            -0.5, 1.0,
+            (float(DefaultValues.W_MIN), max(0.0, float(DefaultValues.W_MAX))),
+            0.05,
+            help="Weight bounds (w_min, w_max) — min and max fraction of wealth allocated to any single asset. Negative values allow short selling.",
         )
-        w_max = st.slider(
-            "Max Allocation per Asset",
-            0.0, 1.0, max(0.0, float(DefaultValues.W_MAX)), 0.05,
-            help="Maximum weight (w_max) — maximum fraction of wealth allocated to any single asset.",
-        )
-        c_min = st.slider(
-            "Min Cash Reserve",
-            0.0, 0.5, float(DefaultValues.C_MIN), 0.05,
-            help="Minimum cash (c_min) — minimum fraction of the portfolio held in cash.",
-        )
-        c_max = st.slider(
-            "Max Cash Reserve",
-            c_min, 1.0, float(DefaultValues.C_MAX), 0.05,
-            help="Maximum cash (c_max) — maximum fraction of the portfolio held in cash.",
+        c_min, c_max = st.slider(
+            "Cash Reserve Range",
+            0.0, 1.0,
+            (float(DefaultValues.C_MIN), float(DefaultValues.C_MAX)),
+            0.05,
+            help="Cash bounds (c_min, c_max) — min and max fraction of the portfolio held in cash.",
         )
         L_tar = st.slider(
             "Max Leverage",

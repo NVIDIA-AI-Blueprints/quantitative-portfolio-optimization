@@ -384,7 +384,7 @@ def display_solver_results(
                 )
 
                 # Display key metrics in columns
-                metric_col1, metric_col2 = st.columns(2)
+                metric_col1, metric_col2, metric_col3 = st.columns(3)
 
                 with metric_col1:
                     st.metric("Expected Return", f"{results['return']*100:.4f}%")
@@ -395,6 +395,8 @@ def display_solver_results(
 
                 with metric_col2:
                     st.metric("Objective Value", f"{results['obj']:.6f}")
+
+                with metric_col3:
                     st.metric("Solve Time", f"{solve_time:.4f}s")
 
                 # Backtest Analysis (if enabled) or Detailed Metrics
