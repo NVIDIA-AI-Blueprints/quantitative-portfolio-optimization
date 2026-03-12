@@ -1448,7 +1448,7 @@ def run_progressive_rebalancing(
     with gpu_progress_placeholder.container():
         st.info(UIText.GPU_SYNCHRONIZED)
     with cpu_progress_placeholder.container():
-        st.info(UIText.CPU_SYNCHRONIZED.format(cpu_solver_choice))
+        st.info(UIText.CPU_SYNCHRONIZED.format(cpu_display_name))
 
     start_event.set()  # Signal both threads to start optimization simultaneously
 
@@ -2224,53 +2224,37 @@ def main():
             else:
                 st.error("CPU failed")
 
-        def _format_portfolio_snapshot(weights_dict, cutoff=1e-3):
-            """Format a portfolio snapshot as a Streamlit-friendly breakdown."""
-            cash = weights_dict.get("cash", 0.0)
-            positions = {k: v for k, v in weights_dict.items() if k != "cash"}
-
-            # Mask tickers
-            tickers_sorted = sorted(positions.keys())
-            ticker_mask = {t: f"Asset {i+1}" for i, t in enumerate(tickers_sorted)}
-
-            long = {ticker_mask[t]: v for t, v in positions.items() if v > cutoff}
-            short = {ticker_mask[t]: v for t, v in positions.items() if v < -cutoff}
-
-            lines = []
-            if long:
-                lines.append(f"**Long Positions** ({len(long)} assets)")
-                for name, w in sorted(long.items(), key=lambda x: -x[1]):
-                    lines.append(f"- {name}: {w:.4f} ({w*100:.2f}%)")
-                lines.append(f"- **Total Long**: {sum(long.values()):.4f} ({sum(long.values())*100:.2f}%)")
-
-            if short:
-                lines.append(f"\n**Short Positions** ({len(short)} assets)")
-                for name, w in sorted(short.items(), key=lambda x: x[1]):
-                    lines.append(f"- {name}: {w:.4f} ({w*100:.2f}%)")
-                lines.append(f"- **Total Short**: {sum(short.values()):.4f} ({sum(short.values())*100:.2f}%)")
-
-            net_equity = sum(positions.values())
-            gross = sum(abs(v) for v in positions.values())
-            lines.append(f"\n**Cash**: {cash:.4f} ({cash*100:.2f}%)")
-            lines.append(f"**Net Equity**: {net_equity:.4f} ({net_equity*100:.2f}%)")
-            lines.append(f"**Gross Exposure**: {gross:.4f} ({gross*100:.2f}%)")
-            return "\n".join(lines)
-
         def _render_period_table(label, result_dict):
-            """Render period results table with per-date expandable portfolio composition."""
+            """Render period results table with expandable portfolio composition."""
             if not (result_dict.get("success") and isinstance(result_dict.get("results_df"), pd.DataFrame)):
                 return
             st.markdown(f"**{label}**")
             df = result_dict["results_df"].reset_index().rename(columns={"index": "date"})
+            df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
             st.dataframe(df, hide_index=True)
 
             snapshots = result_dict.get("portfolio_snapshots", {})
             if snapshots:
-                st.markdown(f"**{label} — Portfolio Composition by Date**")
-                for date_key, weights in snapshots.items():
-                    date_str = str(date_key).split("T")[0].split(" ")[0]
-                    with st.expander(f"📅 {date_str}"):
-                        st.markdown(_format_portfolio_snapshot(weights))
+                with st.expander(f"📂 {label} — Portfolio Composition"):
+                    snap_df = pd.DataFrame.from_dict(snapshots, orient="index")
+                    snap_df.index = pd.to_datetime(snap_df.index).strftime("%Y-%m-%d")
+                    snap_df.index.name = "date"
+
+                    # Mask tickers, keep cash last
+                    asset_cols = sorted([c for c in snap_df.columns if c != "cash"])
+                    masked = {col: f"Asset {i+1}" for i, col in enumerate(asset_cols)}
+                    if "cash" in snap_df.columns:
+                        masked["cash"] = "Cash"
+                    col_order = asset_cols + (["cash"] if "cash" in snap_df.columns else [])
+                    snap_df = snap_df[col_order].rename(columns=masked)
+
+                    # Add summary columns
+                    asset_masked = [f"Asset {i+1}" for i in range(len(asset_cols))]
+                    snap_df["Gross Exposure"] = snap_df[asset_masked].abs().sum(axis=1)
+                    snap_df["Net Equity"] = snap_df[asset_masked].sum(axis=1)
+                    snap_df["# Holdings"] = (snap_df[asset_masked].abs() > 1e-3).sum(axis=1)
+
+                    st.dataframe(snap_df.style.format("{:.4f}"), height=400)
 
         # Detailed tables
         with st.expander("📋 Detailed Period Results", expanded=False):
