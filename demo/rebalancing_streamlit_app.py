@@ -260,7 +260,7 @@ def create_rebalancing_progressive(
             {
                 "solver": solver_name,
                 "status": "initializing",
-                "message": f"{solver_name}: Initializing...",
+                "message": f"{solver_name}: Computing baseline portfolio...",
             }
         )
 
@@ -326,7 +326,7 @@ def create_rebalancing_progressive(
             {
                 "solver": solver_name,
                 "status": "ready",
-                "message": f"{solver_name}: Ready to start - waiting for synchronization",
+                "message": f"{solver_name}: Baseline ready — preparing backtest...",
             }
         )
         start_event.wait()
@@ -335,7 +335,7 @@ def create_rebalancing_progressive(
             {
                 "solver": solver_name,
                 "status": "starting",
-                "message": f"{solver_name}: Starting rebalancing",
+                "message": f"{solver_name}: Backtesting started",
             }
         )
 
@@ -346,7 +346,7 @@ def create_rebalancing_progressive(
                 "solver": solver_name,
                 "status": "plot_ready",
                 "figure": fig,
-                "message": f"{solver_name}: Plot initialized - ready for optimization",
+                "message": f"{solver_name}: Buy & hold baseline plotted",
             }
         )
 
@@ -357,7 +357,7 @@ def create_rebalancing_progressive(
             {
                 "solver": solver_name,
                 "status": "starting_optimization",
-                "message": f"{solver_name}: Starting rebalancing optimization NOW!",
+                "message": f"{solver_name}: Running period-by-period backtest...",
             }
         )
 
@@ -870,7 +870,7 @@ def create_rebalancing_cpu_worker(
         _solver_settings = {"solver": _resolve_cpu_solver(solver_key), "verbose": False}
 
         mp_queue.put({"status": "initializing", "solver": solver_name,
-                       "message": f"{solver_name}: Initializing..."})
+                       "message": f"{solver_name}: Computing baseline portfolio..."})
 
         start_date, end_date = trading_range
 
@@ -1635,7 +1635,15 @@ def main():
             datasets,
             index=default_index,
             format_func=lambda x: _dataset_labels[x],
+            key="dataset_selector",
         )
+
+        # Track dataset changes to auto-switch to Dataset tab
+        if "prev_dataset" not in st.session_state:
+            st.session_state.prev_dataset = dataset_name
+        if dataset_name != st.session_state.prev_dataset:
+            st.session_state.prev_dataset = dataset_name
+            st.session_state.switch_to_dataset_tab = True
 
         col1, col2 = st.columns(2)
         with col1:
@@ -1873,9 +1881,30 @@ def main():
     gif_path = script_dir / "diagrams" / "rebalancing_gpu_vs_cpu.gif"
     qr_path = script_dir / "diagrams" / "nvidia_qr_gtc_session_white_center.png"
 
+    _switch_to_tab = st.session_state.pop("switch_to_dataset_tab", False)
+
     tab_overview, tab_data, tab_demo, tab_arch, tab_bench, tab_refs = st.tabs(
         ["📊 Overview", "📁 Dataset", "🚀 Live Demo", "🏗️ Architecture", "📈 Benchmarks", "📚 References"]
     )
+
+    def _inject_tab_switch(index: int):
+        """Inject JS to programmatically click a Streamlit tab."""
+        st.components.v1.html(
+            f"""<script>
+            (function() {{
+                function go() {{
+                    var tabs = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
+                    if (tabs.length > {index}) {{ tabs[{index}].click(); }}
+                    else {{ setTimeout(go, 50); }}
+                }}
+                go();
+            }})();
+            </script>""",
+            height=0,
+        )
+
+    if _switch_to_tab:
+        _inject_tab_switch(1)
 
     with tab_overview:
         st.markdown("### Backtest Rebalancing Strategies")
@@ -2010,6 +2039,7 @@ def main():
 
     # Run optimization when button is pressed
     if run_btn:
+      _inject_tab_switch(2)
       with tab_demo:
         # Display device info
         import platform
