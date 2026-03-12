@@ -1,3 +1,9 @@
+[server]
+runOnSave = true
+
+[client]
+toolbarMode = "developer"
+
 [theme]
 primaryColor = "#76b900"
 backgroundColor = "#0e1117"
