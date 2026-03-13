@@ -140,18 +140,7 @@ st.markdown(
         background-color: rgba(118, 185, 0, 0.1) !important;
         border-left-color: #76b900 !important;
     }
-    @keyframes treemap-enter {
-        0%   { opacity: 0.06;
-               box-shadow: 0 0 0 3px rgba(118,185,0,0.95), 0 0 35px 6px rgba(118,185,0,0.5); }
-        30%  { opacity: 0.9;
-               box-shadow: 0 0 0 2px rgba(118,185,0,0.6),  0 0 20px 4px rgba(118,185,0,0.25); }
-        60%  { opacity: 1.0;
-               box-shadow: 0 0 0 1px rgba(118,185,0,0.2),  0 0 8px 2px rgba(118,185,0,0.08); }
-        100% { opacity: 1.0;
-               box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent; }
-    }
     div[data-testid="stPlotlyChart"] {
-        animation: treemap-enter 0.85s ease-out;
         border-radius: 8px;
     }
 </style>
@@ -176,8 +165,6 @@ def _build_portfolio_treemap(
     _RED_LIGHT1 = "#ff8181"
     _NV_YELLOW = "#f9c500"
     _YELLOW_LIGHT = "#fcde7b"
-    _GLOW_UP = "#00ff88"
-    _GLOW_DOWN = "#ff4466"
 
     if prev_weights is None:
         prev_weights = {}
@@ -193,7 +180,7 @@ def _build_portfolio_treemap(
     )
 
     labels, parents, values = [], [], []
-    marker_colors, border_colors, border_widths = [], [], []
+    marker_colors = []
     text_colors = []
     custom_text, hover_texts = [], []
 
@@ -223,11 +210,6 @@ def _build_portfolio_treemap(
         arrow = "▲" if delta > 0 else "▼"
         return f" {arrow}{abs(delta)*100:.1f}%", delta
 
-    def _border_for_delta(delta):
-        if abs(delta) > 1e-4:
-            return (_GLOW_UP if delta > 0 else _GLOW_DOWN), 4
-        return "#1a1a2e", 2
-
     def _text_color_for_bg(hex_color):
         r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
         luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
@@ -246,9 +228,6 @@ def _build_portfolio_treemap(
         idx = min(int(seg), len(_green_stops) - 2)
         marker_colors.append(_lerp_hex(_green_stops[idx], _green_stops[idx + 1], seg - idx))
         text_colors.append(_text_color_for_bg(marker_colors[-1]))
-        bc, bw = _border_for_delta(delta)
-        border_colors.append(bc)
-        border_widths.append(bw)
         custom_text.append(f"${dollar:,.0f}<br>{v*100:.1f}%{tag}")
         hover_texts.append(
             f"<b>{name}</b><br>Weight: {v:.4f} ({v*100:.2f}%)<br>"
@@ -270,9 +249,6 @@ def _build_portfolio_treemap(
         idx = min(int(seg), len(_red_stops) - 2)
         marker_colors.append(_lerp_hex(_red_stops[idx], _red_stops[idx + 1], seg - idx))
         text_colors.append(_text_color_for_bg(marker_colors[-1]))
-        bc, bw = _border_for_delta(delta)
-        border_colors.append(bc)
-        border_widths.append(bw)
         custom_text.append(f"-${dollar:,.0f}<br>{v*100:.1f}%{tag}")
         hover_texts.append(
             f"<b>{name} (Short)</b><br>Weight: {v:.4f} ({v*100:.2f}%)<br>"
@@ -289,9 +265,6 @@ def _build_portfolio_treemap(
         values.append(abs(cash))
         marker_colors.append(_lerp_hex(_NV_YELLOW, _YELLOW_LIGHT, 0.3))
         text_colors.append(_text_color_for_bg(marker_colors[-1]))
-        bc, bw = _border_for_delta(delta)
-        border_colors.append(bc)
-        border_widths.append(bw)
         custom_text.append(f"${dollar:,.0f}<br>{cash*100:.1f}%{tag}")
         hover_texts.append(
             f"<b>Cash</b><br>Weight: {cash:.4f} ({cash*100:.2f}%)<br>"
@@ -319,7 +292,7 @@ def _build_portfolio_treemap(
         values=values,
         marker=dict(
             colors=marker_colors,
-            line=dict(color=border_colors, width=border_widths),
+            line=dict(color=_BG, width=2),
             pad=dict(t=30, l=6, r=6, b=6),
         ),
         text=custom_text,
@@ -365,6 +338,14 @@ def get_dataset_num_assets(dataset_name):
     except Exception:
         pass
     return 30  # Fallback
+
+
+def _fig_to_png_bytes(fig):
+    import io
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi="figure", bbox_inches="tight", facecolor=fig.get_facecolor())
+    buf.seek(0)
+    return buf.getvalue()
 
 
 def _create_error_result(solver_name, error_msg):
@@ -1407,8 +1388,11 @@ def cpu_bridge_thread(mp_q, st_progress_q, st_result_q, strategy_display_name, s
             bh_values = msg.get("bh_values", [])
             fig = _build_cpu_figure([], [], bh_index, bh_values, [],
                                     strategy_display_name)
+            with _matplotlib_lock:
+                _img = _fig_to_png_bytes(fig)
+                plt.close(fig)
             st_progress_q.put({"solver": solver_name, "status": "plot_ready",
-                                "figure": fig, "message": msg.get("message", "")})
+                                "figure": _img, "message": msg.get("message", "")})
 
         elif status == "reusing_baseline":
             st_progress_q.put({"solver": solver_name, "status": "reusing_baseline",
@@ -1434,9 +1418,12 @@ def cpu_bridge_thread(mp_q, st_progress_q, st_result_q, strategy_display_name, s
                 msg["cumulative_values"], msg["cumulative_dates"],
                 bh_index, bh_values, msg["rebal_dates"],
                 strategy_display_name)
+            with _matplotlib_lock:
+                _img = _fig_to_png_bytes(fig)
+                plt.close(fig)
             st_progress_q.put({
                 "solver": solver_name, "status": "period_plot_update",
-                "figure": fig,
+                "figure": _img,
                 "period": msg["period"], "total_periods": msg["total_periods"],
             })
 
@@ -1445,12 +1432,15 @@ def cpu_bridge_thread(mp_q, st_progress_q, st_result_q, strategy_display_name, s
                 msg["cumulative_values"], msg["cumulative_dates"],
                 msg.get("bh_index", bh_index), msg.get("bh_values", bh_values),
                 msg["rebal_dates"], strategy_display_name)
+            with _matplotlib_lock:
+                _img = _fig_to_png_bytes(fig)
+                plt.close(fig)
 
             st_progress_q.put({
                 "solver": solver_name, "status": "completed",
                 "total_elapsed_time": msg.get("total_elapsed_time", 0),
                 "total_solve_time": msg.get("total_solve_time", 0),
-                "figure": fig,
+                "figure": _img,
                 "message": msg.get("message", ""),
             })
 
@@ -1468,7 +1458,7 @@ def cpu_bridge_thread(mp_q, st_progress_q, st_result_q, strategy_display_name, s
                 "portfolio_snapshots": msg.get("portfolio_snapshots", {}),
                 "cumulative_series": cum_series,
                 "baseline_series": bh_series,
-                "fig": fig,
+                "fig": None,
                 "total_solve_time": msg.get("total_solve_time", 0),
                 "total_kde_time": msg.get("total_kde_time", 0),
                 "total_elapsed_time": msg.get("total_elapsed_time", 0),
@@ -1584,14 +1574,14 @@ def run_progressive_rebalancing(
     gpu_empty_fig = create_empty_plot()
     cpu_empty_fig = create_empty_plot()
 
-    # Display both plots at exactly the same time with consistent sizing
-    gpu_plot_container.pyplot(gpu_empty_fig, width="stretch")
-    cpu_plot_container.pyplot(cpu_empty_fig, width="stretch")
-
-    # Clean up the temporary figures
     with _matplotlib_lock:
+        gpu_empty_img = _fig_to_png_bytes(gpu_empty_fig)
+        cpu_empty_img = _fig_to_png_bytes(cpu_empty_fig)
         plt.close(gpu_empty_fig)
         plt.close(cpu_empty_fig)
+
+    gpu_plot_container.image(gpu_empty_img, use_container_width=True)
+    cpu_plot_container.image(cpu_empty_img, use_container_width=True)
 
     # Create synchronization event to ensure simultaneous start
     start_event = threading.Event()
@@ -1735,22 +1725,24 @@ def run_progressive_rebalancing(
                                 mask_names=blog_mode, prev_weights=gpu_prev_weights,
                             )
                             gpu_heatmap_container.plotly_chart(
-                                _hfig, use_container_width=True,
+                                _hfig, width="stretch",
                             )
                             gpu_prev_weights = _gpw.copy()
                         except Exception:
                             pass
                 elif status == "period_plot_update" and not gpu_processed_plot:
-                    # Update GPU plot (heavier update, only one per loop iteration)
                     fig = upd.get("figure")
                     if fig is not None:
-                        gpu_plot_container.pyplot(fig, width="stretch")
+                        with _matplotlib_lock:
+                            _img = _fig_to_png_bytes(fig)
+                        gpu_plot_container.image(_img, use_container_width=True)
                         gpu_processed_plot = True
                 elif status == "plot_ready":
-                    # Display the plot ready state - ensures synchronization checkpoint (always show)
                     fig = upd.get("figure")
                     if fig is not None:
-                        gpu_plot_container.pyplot(fig, width="stretch")
+                        with _matplotlib_lock:
+                            _img = _fig_to_png_bytes(fig)
+                        gpu_plot_container.image(_img, use_container_width=True)
                     with gpu_progress_placeholder.container():
                         st.success(upd.get("message", ""))
                 elif status == "ready":
@@ -1772,12 +1764,13 @@ def run_progressive_rebalancing(
                 elif status == "completed":
                     fig = upd.get("figure")
                     if fig is not None:
-                        gpu_plot_container.pyplot(fig, width="stretch")
+                        with _matplotlib_lock:
+                            _img = _fig_to_png_bytes(fig)
+                        gpu_plot_container.image(_img, use_container_width=True)
                     gpu_final_time = upd.get("total_elapsed_time", time.time() - loop_start_time)
                     gpu_final_solve = upd.get("total_solve_time", 0.0)
                     with gpu_progress_placeholder.container():
                         st.success(f"GPU pipeline completed in {gpu_final_time:.2f}s (solver: {gpu_final_solve:.2f}s)")
-                        st.caption("Pipeline = solver + KDE + backtesting + data I/O. Solver = CVaR optimization only.")
                     with gpu_solving_placeholder.container():
                         st.progress(1.0, text=f"✅ Pipeline {gpu_final_time:.2f}s · Solver {gpu_final_solve:.2f}s")
                     gpu_done = True
@@ -1816,22 +1809,20 @@ def run_progressive_rebalancing(
                                 mask_names=blog_mode, prev_weights=cpu_prev_weights,
                             )
                             cpu_heatmap_container.plotly_chart(
-                                _hfig, use_container_width=True,
+                                _hfig, width="stretch",
                             )
                             cpu_prev_weights = _cpw.copy()
                         except Exception:
                             pass
                 elif status == "period_plot_update" and not cpu_processed_plot:
-                    # Update CPU plot (heavier update, only one per loop iteration)
-                    fig = upd.get("figure")
-                    if fig is not None:
-                        cpu_plot_container.pyplot(fig, width="stretch")
+                    _img = upd.get("figure")
+                    if _img is not None:
+                        cpu_plot_container.image(_img, use_container_width=True)
                         cpu_processed_plot = True
                 elif status == "plot_ready":
-                    # Display the plot ready state - ensures synchronization checkpoint (always show)
-                    fig = upd.get("figure")
-                    if fig is not None:
-                        cpu_plot_container.pyplot(fig, width="stretch")
+                    _img = upd.get("figure")
+                    if _img is not None:
+                        cpu_plot_container.image(_img, use_container_width=True)
                     with cpu_progress_placeholder.container():
                         st.success(upd.get("message", ""))
                 elif status == "ready":
@@ -1851,14 +1842,13 @@ def run_progressive_rebalancing(
                     with cpu_progress_placeholder.container():
                         st.info(upd.get("message", ""))
                 elif status == "completed":
-                    fig = upd.get("figure")
-                    if fig is not None:
-                        cpu_plot_container.pyplot(fig, width="stretch")
+                    _img = upd.get("figure")
+                    if _img is not None:
+                        cpu_plot_container.image(_img, use_container_width=True)
                     cpu_final_time = upd.get("total_elapsed_time", time.time() - loop_start_time)
                     cpu_final_solve = upd.get("total_solve_time", 0.0)
                     with cpu_progress_placeholder.container():
                         st.success(f"CPU pipeline completed in {cpu_final_time:.2f}s (solver: {cpu_final_solve:.2f}s)")
-                        st.caption("Pipeline = solver + KDE + backtesting + data I/O. Solver = CVaR optimization only.")
                     with cpu_solving_placeholder.container():
                         st.progress(1.0, text=f"✅ Pipeline {cpu_final_time:.2f}s · Solver {cpu_final_solve:.2f}s")
                     cpu_done = True
@@ -2546,45 +2536,27 @@ def main():
                 gt_solve = max(1e-9, g.get("total_solve_time", 0.0))
                 ct_solve = max(1e-9, c.get("total_solve_time", 0.0))
                 solve_speedup = ct_solve / gt_solve
-                st.metric(
-                    "⚡ Solver Speedup", f"{solve_speedup:.1f}x faster",
-                    help="Ratio of CPU to GPU solver time only (excludes KDE, backtesting, and other overhead).",
-                )
+                st.metric("⚡ Solver Speedup", f"{solve_speedup:.1f}x faster")
                 gt_elapsed = max(1e-9, g.get("total_elapsed_time", 0.0))
                 ct_elapsed = max(1e-9, c.get("total_elapsed_time", 0.0))
                 pipeline_speedup = ct_elapsed / gt_elapsed
-                st.metric(
-                    "🚀 End-to-End Speedup", f"{pipeline_speedup:.1f}x faster",
-                    help="Ratio of total CPU to GPU pipeline time — includes solver, KDE, backtesting, and all overhead.",
-                )
+                st.metric("🚀 End-to-End Speedup", f"{pipeline_speedup:.1f}x faster")
             else:
                 st.error("Speedup calculation failed")
 
-        _help_pipeline = (
-            "Total wall-clock time for the entire backtest pipeline: "
-            "baseline computation, KDE scenario generation, CVaR optimization, "
-            "period-by-period backtesting, and plotting."
-        )
-        _help_solve = (
-            "Time spent only inside the CVaR optimizer across all re-optimization calls. "
-            "This is a subset of the pipeline time — the rest is data loading, "
-            "KDE fitting, backtesting, and rendering."
-        )
-        _help_kde = "Time spent fitting and sampling the KDE model for scenario generation."
-
         with col2:
             if g.get("success"):
-                st.metric("🕐 GPU Pipeline Time", f"{g.get('total_elapsed_time', 0.0):.2f}s", help=_help_pipeline)
-                st.metric("⚡ GPU Solve Time", f"{g.get('total_solve_time', 0.0):.3f}s", help=_help_solve)
-                st.metric("🔬 GPU KDE Time", f"{g.get('total_kde_time', 0.0):.3f}s", help=_help_kde)
+                st.metric("🕐 GPU Pipeline Time", f"{g.get('total_elapsed_time', 0.0):.2f}s")
+                st.metric("⚡ GPU Solve Time", f"{g.get('total_solve_time', 0.0):.3f}s")
+                st.metric("🔬 GPU KDE Time", f"{g.get('total_kde_time', 0.0):.3f}s")
             else:
                 st.error("GPU failed")
 
         with col3:
             if c.get("success"):
-                st.metric("🕐 CPU Pipeline Time", f"{c.get('total_elapsed_time', 0.0):.2f}s", help=_help_pipeline)
-                st.metric("⚡ CPU Solve Time", f"{c.get('total_solve_time', 0.0):.3f}s", help=_help_solve)
-                st.metric("🔬 CPU KDE Time", f"{c.get('total_kde_time', 0.0):.3f}s", help=_help_kde)
+                st.metric("🕐 CPU Pipeline Time", f"{c.get('total_elapsed_time', 0.0):.2f}s")
+                st.metric("⚡ CPU Solve Time", f"{c.get('total_solve_time', 0.0):.3f}s")
+                st.metric("🔬 CPU KDE Time", f"{c.get('total_kde_time', 0.0):.3f}s")
             else:
                 st.error("CPU failed")
 
