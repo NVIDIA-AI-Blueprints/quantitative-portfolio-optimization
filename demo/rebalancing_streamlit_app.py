@@ -309,14 +309,9 @@ def _build_portfolio_treemap(
     ))
 
     fig.update_layout(
-        title=dict(
-            text=f"Portfolio Allocation {title_suffix}".strip(),
-            font=dict(size=13, color="#fafafa", family="Arial"),
-            x=0.5, xanchor="center",
-        ),
         paper_bgcolor=_BG,
         plot_bgcolor=_BG,
-        margin=dict(t=40, l=5, r=5, b=5),
+        margin=dict(t=5, l=5, r=5, b=5),
         height=380,
         autosize=True,
         transition=dict(duration=400, easing="cubic-in-out"),
@@ -2538,16 +2533,11 @@ def main():
                 ct_solve = max(1e-9, c.get("total_solve_time", 0.0))
                 solve_speedup = ct_solve / gt_solve
                 st.metric("⚡ Solver Speedup", f"{solve_speedup:.1f}x faster")
-                gt_elapsed = max(1e-9, g.get("total_elapsed_time", 0.0))
-                ct_elapsed = max(1e-9, c.get("total_elapsed_time", 0.0))
-                pipeline_speedup = ct_elapsed / gt_elapsed
-                st.metric("🚀 End-to-End Speedup", f"{pipeline_speedup:.1f}x faster")
             else:
                 st.error("Speedup calculation failed")
 
         with col2:
             if g.get("success"):
-                st.metric("🕐 GPU Pipeline Time", f"{g.get('total_elapsed_time', 0.0):.2f}s")
                 st.metric("⚡ GPU Solve Time", f"{g.get('total_solve_time', 0.0):.3f}s")
                 st.metric("🔬 GPU KDE Time", f"{g.get('total_kde_time', 0.0):.3f}s")
             else:
@@ -2555,7 +2545,6 @@ def main():
 
         with col3:
             if c.get("success"):
-                st.metric("🕐 CPU Pipeline Time", f"{c.get('total_elapsed_time', 0.0):.2f}s")
                 st.metric("⚡ CPU Solve Time", f"{c.get('total_solve_time', 0.0):.3f}s")
                 st.metric("🔬 CPU KDE Time", f"{c.get('total_kde_time', 0.0):.3f}s")
             else:
