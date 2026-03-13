@@ -130,8 +130,8 @@ st.markdown(
         margin: 0.5rem 0;
         border-left: 4px solid #76b900;
     }
-    .stProgress .st-bo {
-        background-color: #76b900;
+    div[role="progressbar"] > div {
+        background-color: #76b900 !important;
     }
     .stAlert[data-baseweb="notification"] {
         border-left-color: #76b900 !important;
@@ -407,7 +407,7 @@ def _init_rebalancing_figure(title_suffix: str, xlim=None, ylim=None):
         sns.set_context(MatplotlibConfig.CONTEXT, font_scale=MatplotlibConfig.FONT_SCALE)
 
         fig, ax = plt.subplots(
-            figsize=PlotStyling.FIGURE_SIZE,
+            figsize=PlotStyling.REBALANCING_FIGURE_SIZE,
             dpi=PlotStyling.FIGURE_DPI,
             facecolor=colors["background"],
             tight_layout=True,
@@ -1545,7 +1545,7 @@ def run_progressive_rebalancing(
 
             # Create figure with consistent sizing and layout
             fig, ax = plt.subplots(
-                figsize=PlotStyling.FIGURE_SIZE,
+                figsize=PlotStyling.REBALANCING_FIGURE_SIZE,
                 dpi=PlotStyling.FIGURE_DPI,
                 facecolor=colors["background"],
                 tight_layout=True,
@@ -1777,6 +1777,7 @@ def run_progressive_rebalancing(
                     gpu_final_solve = upd.get("total_solve_time", 0.0)
                     with gpu_progress_placeholder.container():
                         st.success(f"GPU pipeline completed in {gpu_final_time:.2f}s (solver: {gpu_final_solve:.2f}s)")
+                        st.caption("Pipeline = solver + KDE + backtesting + data I/O. Solver = CVaR optimization only.")
                     with gpu_solving_placeholder.container():
                         st.progress(1.0, text=f"✅ Pipeline {gpu_final_time:.2f}s · Solver {gpu_final_solve:.2f}s")
                     gpu_done = True
@@ -1857,6 +1858,7 @@ def run_progressive_rebalancing(
                     cpu_final_solve = upd.get("total_solve_time", 0.0)
                     with cpu_progress_placeholder.container():
                         st.success(f"CPU pipeline completed in {cpu_final_time:.2f}s (solver: {cpu_final_solve:.2f}s)")
+                        st.caption("Pipeline = solver + KDE + backtesting + data I/O. Solver = CVaR optimization only.")
                     with cpu_solving_placeholder.container():
                         st.progress(1.0, text=f"✅ Pipeline {cpu_final_time:.2f}s · Solver {cpu_final_solve:.2f}s")
                     cpu_done = True
@@ -2544,27 +2546,45 @@ def main():
                 gt_solve = max(1e-9, g.get("total_solve_time", 0.0))
                 ct_solve = max(1e-9, c.get("total_solve_time", 0.0))
                 solve_speedup = ct_solve / gt_solve
-                st.metric("⚡ Solver Speedup", f"{solve_speedup:.1f}x faster")
+                st.metric(
+                    "⚡ Solver Speedup", f"{solve_speedup:.1f}x faster",
+                    help="Ratio of CPU to GPU solver time only (excludes KDE, backtesting, and other overhead).",
+                )
                 gt_elapsed = max(1e-9, g.get("total_elapsed_time", 0.0))
                 ct_elapsed = max(1e-9, c.get("total_elapsed_time", 0.0))
                 pipeline_speedup = ct_elapsed / gt_elapsed
-                st.metric("🚀 End-to-End Speedup", f"{pipeline_speedup:.1f}x faster")
+                st.metric(
+                    "🚀 End-to-End Speedup", f"{pipeline_speedup:.1f}x faster",
+                    help="Ratio of total CPU to GPU pipeline time — includes solver, KDE, backtesting, and all overhead.",
+                )
             else:
                 st.error("Speedup calculation failed")
 
+        _help_pipeline = (
+            "Total wall-clock time for the entire backtest pipeline: "
+            "baseline computation, KDE scenario generation, CVaR optimization, "
+            "period-by-period backtesting, and plotting."
+        )
+        _help_solve = (
+            "Time spent only inside the CVaR optimizer across all re-optimization calls. "
+            "This is a subset of the pipeline time — the rest is data loading, "
+            "KDE fitting, backtesting, and rendering."
+        )
+        _help_kde = "Time spent fitting and sampling the KDE model for scenario generation."
+
         with col2:
             if g.get("success"):
-                st.metric("🕐 GPU Pipeline Time", f"{g.get('total_elapsed_time', 0.0):.2f}s")
-                st.metric("⚡ GPU Solve Time", f"{g.get('total_solve_time', 0.0):.3f}s")
-                st.metric("🔬 GPU KDE Time", f"{g.get('total_kde_time', 0.0):.3f}s")
+                st.metric("🕐 GPU Pipeline Time", f"{g.get('total_elapsed_time', 0.0):.2f}s", help=_help_pipeline)
+                st.metric("⚡ GPU Solve Time", f"{g.get('total_solve_time', 0.0):.3f}s", help=_help_solve)
+                st.metric("🔬 GPU KDE Time", f"{g.get('total_kde_time', 0.0):.3f}s", help=_help_kde)
             else:
                 st.error("GPU failed")
 
         with col3:
             if c.get("success"):
-                st.metric("🕐 CPU Pipeline Time", f"{c.get('total_elapsed_time', 0.0):.2f}s")
-                st.metric("⚡ CPU Solve Time", f"{c.get('total_solve_time', 0.0):.3f}s")
-                st.metric("🔬 CPU KDE Time", f"{c.get('total_kde_time', 0.0):.3f}s")
+                st.metric("🕐 CPU Pipeline Time", f"{c.get('total_elapsed_time', 0.0):.2f}s", help=_help_pipeline)
+                st.metric("⚡ CPU Solve Time", f"{c.get('total_solve_time', 0.0):.3f}s", help=_help_solve)
+                st.metric("🔬 CPU KDE Time", f"{c.get('total_kde_time', 0.0):.3f}s", help=_help_kde)
             else:
                 st.error("CPU failed")
 
