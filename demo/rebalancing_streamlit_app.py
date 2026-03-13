@@ -39,6 +39,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import seaborn as sns
 import streamlit as st
 
@@ -113,7 +114,7 @@ st.markdown(
         font-weight: bold;
         color: #76b900;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 0.5rem;
     }
     .section-header {
         font-size: 1.5rem;
@@ -129,8 +130,8 @@ st.markdown(
         margin: 0.5rem 0;
         border-left: 4px solid #76b900;
     }
-    .stProgress .st-bo {
-        background-color: #76b900;
+    div[role="progressbar"] > div {
+        background-color: #76b900 !important;
     }
     .stAlert[data-baseweb="notification"] {
         border-left-color: #76b900 !important;
@@ -139,22 +140,20 @@ st.markdown(
         background-color: rgba(118, 185, 0, 0.1) !important;
         border-left-color: #76b900 !important;
     }
+    div[data-testid="stPlotlyChart"] {
+        border-radius: 8px;
+    }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
 
-def _build_portfolio_treemap(weights_dict, title_suffix="", cutoff=1e-3, notional=100_000_000, mask_names=True):
-    """Build a treemap figure showing portfolio composition.
-
-    Uses NVIDIA brand palette on a black background.
-    Rectangles are sized by absolute weight.
-    """
-    import squarify
-
-    _BG = "#000000"
-    # NVIDIA brand secondary palette
+def _build_portfolio_treemap(
+    weights_dict, title_suffix="", cutoff=1e-3, notional=100_000_000,
+    mask_names=True, prev_weights=None,
+):
+    _BG = "#0e1117"
     _GREEN_DARK2 = "#265600"
     _GREEN_DARK1 = "#3f8500"
     _NV_GREEN = "#76b900"
@@ -167,94 +166,154 @@ def _build_portfolio_treemap(weights_dict, title_suffix="", cutoff=1e-3, notiona
     _NV_YELLOW = "#f9c500"
     _YELLOW_LIGHT = "#fcde7b"
 
-    def _hex_to_rgb(h):
-        return tuple(int(h[i:i+2], 16) / 255 for i in (1, 3, 5))
+    if prev_weights is None:
+        prev_weights = {}
 
-    def _lerp_color(hex_a, hex_b, frac):
-        a, b = _hex_to_rgb(hex_a), _hex_to_rgb(hex_b)
-        return tuple(a[i] + (b[i] - a[i]) * frac for i in range(3)) + (0.92,)
+    positions = {k: v for k, v in weights_dict.items() if k != "cash"}
+    cash = weights_dict.get("cash", 0.0)
 
-    with _matplotlib_lock:
-        plt.style.use(MatplotlibConfig.STYLE)
+    tickers_sorted = sorted(positions.keys())
+    mask = (
+        {t: f"Asset {i+1}" for i, t in enumerate(tickers_sorted)}
+        if mask_names
+        else {t: t for t in tickers_sorted}
+    )
 
-        positions = {k: v for k, v in weights_dict.items() if k != "cash"}
-        cash = weights_dict.get("cash", 0.0)
+    labels, parents, values = [], [], []
+    marker_colors = []
+    text_colors = []
+    custom_text, hover_texts = [], []
 
-        tickers_sorted = sorted(positions.keys())
-        if mask_names:
-            mask = {t: f"Asset {i+1}" for i, t in enumerate(tickers_sorted)}
-        else:
-            mask = {t: t for t in tickers_sorted}
+    long_items = sorted(
+        [(t, v) for t, v in positions.items() if v > cutoff],
+        key=lambda x: -x[1],
+    )
+    short_items = sorted(
+        [(t, v) for t, v in positions.items() if v < -cutoff],
+        key=lambda x: x[1],
+    )
 
-        labels = []
-        sizes = []
-        rect_colors = []
-
-        long_items = sorted(
-            [(t, v) for t, v in positions.items() if v > cutoff],
-            key=lambda x: -x[1],
+    def _lerp_hex(hex_a, hex_b, frac):
+        a = tuple(int(hex_a[i:i + 2], 16) for i in (1, 3, 5))
+        b = tuple(int(hex_b[i:i + 2], 16) for i in (1, 3, 5))
+        return "#{:02x}{:02x}{:02x}".format(
+            int(a[0] + (b[0] - a[0]) * frac),
+            int(a[1] + (b[1] - a[1]) * frac),
+            int(a[2] + (b[2] - a[2]) * frac),
         )
-        short_items = sorted(
-            [(t, v) for t, v in positions.items() if v < -cutoff],
-            key=lambda x: x[1],
+
+    def _change_tag(ticker, weight):
+        prev = prev_weights.get(ticker, 0.0)
+        delta = weight - prev
+        if abs(delta) < 1e-4 or not prev_weights:
+            return "", 0.0
+        arrow = "▲" if delta > 0 else "▼"
+        return f" {arrow}{abs(delta)*100:.1f}%", delta
+
+    def _text_color_for_bg(hex_color):
+        r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        return "#1a1a2e" if luminance > 0.52 else "#ffffff"
+
+    _green_stops = [_GREEN_DARK2, _GREEN_DARK1, _NV_GREEN, _GREEN_LIGHT1, _GREEN_LIGHT2]
+    for i, (t, v) in enumerate(long_items):
+        dollar = abs(v) * notional
+        name = mask[t]
+        tag, delta = _change_tag(t, v)
+        labels.append(name)
+        parents.append("")
+        values.append(abs(v))
+        frac = i / max(1, len(long_items) - 1) if len(long_items) > 1 else 0.5
+        seg = frac * (len(_green_stops) - 1)
+        idx = min(int(seg), len(_green_stops) - 2)
+        marker_colors.append(_lerp_hex(_green_stops[idx], _green_stops[idx + 1], seg - idx))
+        text_colors.append(_text_color_for_bg(marker_colors[-1]))
+        custom_text.append(f"${dollar:,.0f}<br>{v*100:.1f}%{tag}")
+        hover_texts.append(
+            f"<b>{name}</b><br>Weight: {v:.4f} ({v*100:.2f}%)<br>"
+            f"Value: ${dollar:,.0f}"
+            + (f"<br>Δ {tag.strip()}" if tag else "")
+            + "<extra></extra>"
         )
 
-        # Green gradient: Dark2 → Dark1 → Green → Light1 → Light2
-        _green_stops = [_GREEN_DARK2, _GREEN_DARK1, _NV_GREEN, _GREEN_LIGHT1, _GREEN_LIGHT2]
-        for i, (t, v) in enumerate(long_items):
-            _val = abs(v) * notional
-            labels.append(f"{mask[t]}\n${_val:,.0f}")
-            sizes.append(abs(v))
-            frac = i / max(1, len(long_items) - 1) if len(long_items) > 1 else 0
-            seg = frac * (len(_green_stops) - 1)
-            idx = min(int(seg), len(_green_stops) - 2)
-            local_frac = seg - idx
-            rect_colors.append(_lerp_color(_green_stops[idx], _green_stops[idx + 1], local_frac))
-
-        # Red gradient: Dark2 → Dark1 → Red → Light1
-        _red_stops = [_RED_DARK2, _RED_DARK1, _NV_RED, _RED_LIGHT1]
-        for i, (t, v) in enumerate(short_items):
-            _val = abs(v) * notional
-            labels.append(f"{mask[t]} (Short)\n-${_val:,.0f}")
-            sizes.append(abs(v))
-            frac = i / max(1, len(short_items) - 1) if len(short_items) > 1 else 0
-            seg = frac * (len(_red_stops) - 1)
-            idx = min(int(seg), len(_red_stops) - 2)
-            local_frac = seg - idx
-            rect_colors.append(_lerp_color(_red_stops[idx], _red_stops[idx + 1], local_frac))
-
-        if abs(cash) > cutoff:
-            _val = abs(cash) * notional
-            labels.append(f"Cash\n${_val:,.0f}")
-            sizes.append(abs(cash))
-            rect_colors.append(_lerp_color(_NV_YELLOW, _YELLOW_LIGHT, 0.3))
-
-        if not sizes:
-            fig, ax = plt.subplots(figsize=(8, 5), dpi=100, facecolor=_BG)
-            ax.set_facecolor(_BG)
-            ax.text(0.5, 0.5, "No positions", ha="center", va="center",
-                    fontsize=14, color="#888")
-            ax.axis("off")
-            return fig
-
-        fig, ax = plt.subplots(figsize=(8, 5), dpi=100, facecolor=_BG)
-        ax.set_facecolor(_BG)
-
-        squarify.plot(
-            sizes=sizes,
-            label=labels,
-            color=rect_colors,
-            alpha=0.92,
-            ax=ax,
-            text_kwargs={"fontsize": 9, "color": "white", "fontweight": "bold"},
-            bar_kwargs={"linewidth": 2, "edgecolor": _BG},
+    _red_stops = [_RED_DARK2, _RED_DARK1, _NV_RED, _RED_LIGHT1]
+    for i, (t, v) in enumerate(short_items):
+        dollar = abs(v) * notional
+        name = mask[t]
+        tag, delta = _change_tag(t, v)
+        labels.append(f"{name} (S)")
+        parents.append("")
+        values.append(abs(v))
+        frac = i / max(1, len(short_items) - 1) if len(short_items) > 1 else 0.5
+        seg = frac * (len(_red_stops) - 1)
+        idx = min(int(seg), len(_red_stops) - 2)
+        marker_colors.append(_lerp_hex(_red_stops[idx], _red_stops[idx + 1], seg - idx))
+        text_colors.append(_text_color_for_bg(marker_colors[-1]))
+        custom_text.append(f"-${dollar:,.0f}<br>{v*100:.1f}%{tag}")
+        hover_texts.append(
+            f"<b>{name} (Short)</b><br>Weight: {v:.4f} ({v*100:.2f}%)<br>"
+            f"Value: -${dollar:,.0f}"
+            + (f"<br>Δ {tag.strip()}" if tag else "")
+            + "<extra></extra>"
         )
-        ax.set_title(
-            f"Portfolio Allocation {title_suffix}".strip(),
-            fontsize=11, fontweight="bold", pad=6, color="#fafafa",
+
+    if abs(cash) > cutoff:
+        dollar = abs(cash) * notional
+        tag, delta = _change_tag("cash", cash)
+        labels.append("💵 Cash")
+        parents.append("")
+        values.append(abs(cash))
+        marker_colors.append(_lerp_hex(_NV_YELLOW, _YELLOW_LIGHT, 0.3))
+        text_colors.append(_text_color_for_bg(marker_colors[-1]))
+        custom_text.append(f"${dollar:,.0f}<br>{cash*100:.1f}%{tag}")
+        hover_texts.append(
+            f"<b>Cash</b><br>Weight: {cash:.4f} ({cash*100:.2f}%)<br>"
+            f"Value: ${dollar:,.0f}"
+            + (f"<br>Δ {tag.strip()}" if tag else "")
+            + "<extra></extra>"
         )
-        ax.axis("off")
-        fig.tight_layout(pad=0.5)
+
+    if not labels:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No positions", xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color="#888"),
+        )
+        fig.update_layout(
+            paper_bgcolor=_BG, plot_bgcolor=_BG,
+            height=550, margin=dict(t=30, l=5, r=5, b=5),
+        )
+        return fig
+
+    fig = go.Figure(go.Treemap(
+        labels=labels,
+        parents=parents,
+        values=values,
+        marker=dict(
+            colors=marker_colors,
+            line=dict(color=_BG, width=2),
+            pad=dict(t=30, l=6, r=6, b=6),
+        ),
+        text=custom_text,
+        texttemplate="<b>%{label}</b><br>%{text}",
+        hovertemplate=hover_texts,
+        textfont=dict(size=12, color=text_colors, family="Arial Black"),
+        pathbar=dict(visible=False),
+        tiling=dict(packing="squarify", pad=3),
+    ))
+
+    fig.update_layout(
+        title=dict(
+            text=f"Portfolio Allocation {title_suffix}".strip(),
+            font=dict(size=13, color="#fafafa", family="Arial"),
+            x=0.5, xanchor="center",
+        ),
+        paper_bgcolor=_BG,
+        plot_bgcolor=_BG,
+        margin=dict(t=40, l=5, r=5, b=5),
+        height=550,
+    )
 
     return fig
 
@@ -279,6 +338,14 @@ def get_dataset_num_assets(dataset_name):
     except Exception:
         pass
     return 30  # Fallback
+
+
+def _fig_to_png_bytes(fig):
+    import io
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi="figure", bbox_inches="tight", facecolor=fig.get_facecolor())
+    buf.seek(0)
+    return buf.getvalue()
 
 
 def _create_error_result(solver_name, error_msg):
@@ -321,7 +388,7 @@ def _init_rebalancing_figure(title_suffix: str, xlim=None, ylim=None):
         sns.set_context(MatplotlibConfig.CONTEXT, font_scale=MatplotlibConfig.FONT_SCALE)
 
         fig, ax = plt.subplots(
-            figsize=PlotStyling.FIGURE_SIZE,
+            figsize=PlotStyling.REBALANCING_FIGURE_SIZE,
             dpi=PlotStyling.FIGURE_DPI,
             facecolor=colors["background"],
             tight_layout=True,
@@ -1321,8 +1388,11 @@ def cpu_bridge_thread(mp_q, st_progress_q, st_result_q, strategy_display_name, s
             bh_values = msg.get("bh_values", [])
             fig = _build_cpu_figure([], [], bh_index, bh_values, [],
                                     strategy_display_name)
+            with _matplotlib_lock:
+                _img = _fig_to_png_bytes(fig)
+                plt.close(fig)
             st_progress_q.put({"solver": solver_name, "status": "plot_ready",
-                                "figure": fig, "message": msg.get("message", "")})
+                                "figure": _img, "message": msg.get("message", "")})
 
         elif status == "reusing_baseline":
             st_progress_q.put({"solver": solver_name, "status": "reusing_baseline",
@@ -1348,9 +1418,12 @@ def cpu_bridge_thread(mp_q, st_progress_q, st_result_q, strategy_display_name, s
                 msg["cumulative_values"], msg["cumulative_dates"],
                 bh_index, bh_values, msg["rebal_dates"],
                 strategy_display_name)
+            with _matplotlib_lock:
+                _img = _fig_to_png_bytes(fig)
+                plt.close(fig)
             st_progress_q.put({
                 "solver": solver_name, "status": "period_plot_update",
-                "figure": fig,
+                "figure": _img,
                 "period": msg["period"], "total_periods": msg["total_periods"],
             })
 
@@ -1359,12 +1432,15 @@ def cpu_bridge_thread(mp_q, st_progress_q, st_result_q, strategy_display_name, s
                 msg["cumulative_values"], msg["cumulative_dates"],
                 msg.get("bh_index", bh_index), msg.get("bh_values", bh_values),
                 msg["rebal_dates"], strategy_display_name)
+            with _matplotlib_lock:
+                _img = _fig_to_png_bytes(fig)
+                plt.close(fig)
 
             st_progress_q.put({
                 "solver": solver_name, "status": "completed",
                 "total_elapsed_time": msg.get("total_elapsed_time", 0),
                 "total_solve_time": msg.get("total_solve_time", 0),
-                "figure": fig,
+                "figure": _img,
                 "message": msg.get("message", ""),
             })
 
@@ -1382,7 +1458,7 @@ def cpu_bridge_thread(mp_q, st_progress_q, st_result_q, strategy_display_name, s
                 "portfolio_snapshots": msg.get("portfolio_snapshots", {}),
                 "cumulative_series": cum_series,
                 "baseline_series": bh_series,
-                "fig": fig,
+                "fig": None,
                 "total_solve_time": msg.get("total_solve_time", 0),
                 "total_kde_time": msg.get("total_kde_time", 0),
                 "total_elapsed_time": msg.get("total_elapsed_time", 0),
@@ -1416,6 +1492,9 @@ def run_progressive_rebalancing(
     cpu_heatmap_container,
     gpu_progress_placeholder,
     cpu_progress_placeholder,
+    gpu_solving_placeholder,
+    cpu_solving_placeholder,
+    header_placeholder,
     cpu_solver_choice: str,
     blog_mode: bool = True,
     notional: int = 100_000_000,
@@ -1456,7 +1535,7 @@ def run_progressive_rebalancing(
 
             # Create figure with consistent sizing and layout
             fig, ax = plt.subplots(
-                figsize=PlotStyling.FIGURE_SIZE,
+                figsize=PlotStyling.REBALANCING_FIGURE_SIZE,
                 dpi=PlotStyling.FIGURE_DPI,
                 facecolor=colors["background"],
                 tight_layout=True,
@@ -1495,14 +1574,14 @@ def run_progressive_rebalancing(
     gpu_empty_fig = create_empty_plot()
     cpu_empty_fig = create_empty_plot()
 
-    # Display both plots at exactly the same time with consistent sizing
-    gpu_plot_container.pyplot(gpu_empty_fig, width="stretch")
-    cpu_plot_container.pyplot(cpu_empty_fig, width="stretch")
-
-    # Clean up the temporary figures
     with _matplotlib_lock:
+        gpu_empty_img = _fig_to_png_bytes(gpu_empty_fig)
+        cpu_empty_img = _fig_to_png_bytes(cpu_empty_fig)
         plt.close(gpu_empty_fig)
         plt.close(cpu_empty_fig)
+
+    gpu_plot_container.image(gpu_empty_img, width="stretch")
+    cpu_plot_container.image(cpu_empty_img, width="stretch")
 
     # Create synchronization event to ensure simultaneous start
     start_event = threading.Event()
@@ -1597,8 +1676,31 @@ def run_progressive_rebalancing(
     gpu_started = False
     cpu_started = False
 
+    # Track last known progress for elapsed-time display between refreshes
+    gpu_last_progress = {}
+    cpu_last_progress = {}
+    loop_start_time = time.time()
+    gpu_last_progress_time = loop_start_time
+    cpu_last_progress_time = loop_start_time
+    last_idle_render_time = 0.0
+    header_clear_time = loop_start_time + 3.0
+    header_cleared = False
+    gpu_final_time = None
+    cpu_final_time = None
+    gpu_prev_weights = {}
+    cpu_prev_weights = {}
+
+    # Show initial waiting bars immediately
+    with gpu_solving_placeholder.container():
+        st.progress(0.0, text="⏳ Initializing GPU...")
+    with cpu_solving_placeholder.container():
+        st.progress(0.0, text="⏳ Initializing CPU...")
+
     # Main loop: drain queues frequently
     while not (gpu_done and cpu_done):
+        gpu_had_update = False
+        cpu_had_update = False
+
         # GPU updates - process ALL pending progress updates for immediate response
         gpu_processed_plot = False
         try:
@@ -1609,36 +1711,38 @@ def run_progressive_rebalancing(
                     with gpu_progress_placeholder.container():
                         st.info(upd.get("message", ""))
                 elif status == "period_progress":
+                    gpu_had_update = True
+                    gpu_last_progress_time = time.time()
+                    gpu_last_progress = upd
                     with gpu_progress_placeholder.container():
-                        period = upd.get("period", 0)
-                        total = max(1, upd.get("total_periods", 1))
                         st.info(upd.get("message", ""))
-                        st.progress(min(1.0, period / total))
-
-                        # Clean progress display
-                        st.caption(
-                            f"**Period {period}/{total}** | Portfolio: ${upd.get('portfolio_value', 0.0):.3f}"
-                        )
                     # Live heatmap update
                     _gpw = upd.get("portfolio_weights", {})
                     if _gpw:
                         try:
-                            _hfig = _build_portfolio_treemap(_gpw, "— GPU", notional=notional, mask_names=blog_mode)
-                            gpu_heatmap_container.pyplot(_hfig, width="stretch")
-                            plt.close(_hfig)
+                            _hfig = _build_portfolio_treemap(
+                                _gpw, "— GPU", notional=notional,
+                                mask_names=blog_mode, prev_weights=gpu_prev_weights,
+                            )
+                            gpu_heatmap_container.plotly_chart(
+                                _hfig, width="stretch",
+                            )
+                            gpu_prev_weights = _gpw.copy()
                         except Exception:
                             pass
                 elif status == "period_plot_update" and not gpu_processed_plot:
-                    # Update GPU plot (heavier update, only one per loop iteration)
                     fig = upd.get("figure")
                     if fig is not None:
-                        gpu_plot_container.pyplot(fig, width="stretch")
+                        with _matplotlib_lock:
+                            _img = _fig_to_png_bytes(fig)
+                        gpu_plot_container.image(_img, width="stretch")
                         gpu_processed_plot = True
                 elif status == "plot_ready":
-                    # Display the plot ready state - ensures synchronization checkpoint (always show)
                     fig = upd.get("figure")
                     if fig is not None:
-                        gpu_plot_container.pyplot(fig, width="stretch")
+                        with _matplotlib_lock:
+                            _img = _fig_to_png_bytes(fig)
+                        gpu_plot_container.image(_img, width="stretch")
                     with gpu_progress_placeholder.container():
                         st.success(upd.get("message", ""))
                 elif status == "ready":
@@ -1658,20 +1762,24 @@ def run_progressive_rebalancing(
                     with gpu_progress_placeholder.container():
                         st.info(upd.get("message", ""))
                 elif status == "completed":
-                    # Display final plot immediately with completion (if included)
                     fig = upd.get("figure")
                     if fig is not None:
-                        gpu_plot_container.pyplot(fig, width="stretch")
-
+                        with _matplotlib_lock:
+                            _img = _fig_to_png_bytes(fig)
+                        gpu_plot_container.image(_img, width="stretch")
+                    gpu_final_time = upd.get("total_elapsed_time", time.time() - loop_start_time)
+                    gpu_final_solve = upd.get("total_solve_time", 0.0)
                     with gpu_progress_placeholder.container():
-                        st.success(
-                            f"GPU completed in {upd.get('total_elapsed_time', 0.0):.2f}s"
-                        )
+                        st.success(f"GPU pipeline completed in {gpu_final_time:.2f}s (solver: {gpu_final_solve:.2f}s)")
+                    with gpu_solving_placeholder.container():
+                        st.progress(1.0, text=f"✅ Pipeline {gpu_final_time:.2f}s · Solver {gpu_final_solve:.2f}s")
                     gpu_done = True
                     break
                 elif status == "error":
                     with gpu_progress_placeholder.container():
                         st.error(upd.get("message", "GPU error"))
+                    with gpu_solving_placeholder.container():
+                        st.progress(0.0, text="❌ Error")
                     gpu_done = True
                     break
         except queue.Empty:
@@ -1687,36 +1795,34 @@ def run_progressive_rebalancing(
                     with cpu_progress_placeholder.container():
                         st.info(upd.get("message", ""))
                 elif status == "period_progress":
+                    cpu_had_update = True
+                    cpu_last_progress_time = time.time()
+                    cpu_last_progress = upd
                     with cpu_progress_placeholder.container():
-                        period = upd.get("period", 0)
-                        total = max(1, upd.get("total_periods", 1))
                         st.info(upd.get("message", ""))
-                        st.progress(min(1.0, period / total))
-
-                        # Clean progress display
-                        st.caption(
-                            f"**Period {period}/{total}** | Portfolio: ${upd.get('portfolio_value', 0.0):.3f}"
-                        )
                     # Live heatmap update
                     _cpw = upd.get("portfolio_weights", {})
                     if _cpw:
                         try:
-                            _hfig = _build_portfolio_treemap(_cpw, "— CPU", notional=notional, mask_names=blog_mode)
-                            cpu_heatmap_container.pyplot(_hfig, width="stretch")
-                            plt.close(_hfig)
+                            _hfig = _build_portfolio_treemap(
+                                _cpw, "— CPU", notional=notional,
+                                mask_names=blog_mode, prev_weights=cpu_prev_weights,
+                            )
+                            cpu_heatmap_container.plotly_chart(
+                                _hfig, width="stretch",
+                            )
+                            cpu_prev_weights = _cpw.copy()
                         except Exception:
                             pass
                 elif status == "period_plot_update" and not cpu_processed_plot:
-                    # Update CPU plot (heavier update, only one per loop iteration)
-                    fig = upd.get("figure")
-                    if fig is not None:
-                        cpu_plot_container.pyplot(fig, width="stretch")
+                    _img = upd.get("figure")
+                    if _img is not None:
+                        cpu_plot_container.image(_img, width="stretch")
                         cpu_processed_plot = True
                 elif status == "plot_ready":
-                    # Display the plot ready state - ensures synchronization checkpoint (always show)
-                    fig = upd.get("figure")
-                    if fig is not None:
-                        cpu_plot_container.pyplot(fig, width="stretch")
+                    _img = upd.get("figure")
+                    if _img is not None:
+                        cpu_plot_container.image(_img, width="stretch")
                     with cpu_progress_placeholder.container():
                         st.success(upd.get("message", ""))
                 elif status == "ready":
@@ -1736,20 +1842,22 @@ def run_progressive_rebalancing(
                     with cpu_progress_placeholder.container():
                         st.info(upd.get("message", ""))
                 elif status == "completed":
-                    # Display final plot immediately with completion (if included)
-                    fig = upd.get("figure")
-                    if fig is not None:
-                        cpu_plot_container.pyplot(fig, width="stretch")
-
+                    _img = upd.get("figure")
+                    if _img is not None:
+                        cpu_plot_container.image(_img, width="stretch")
+                    cpu_final_time = upd.get("total_elapsed_time", time.time() - loop_start_time)
+                    cpu_final_solve = upd.get("total_solve_time", 0.0)
                     with cpu_progress_placeholder.container():
-                        st.success(
-                            f"CPU completed in {upd.get('total_elapsed_time', 0.0):.2f}s"
-                        )
+                        st.success(f"CPU pipeline completed in {cpu_final_time:.2f}s (solver: {cpu_final_solve:.2f}s)")
+                    with cpu_solving_placeholder.container():
+                        st.progress(1.0, text=f"✅ Pipeline {cpu_final_time:.2f}s · Solver {cpu_final_solve:.2f}s")
                     cpu_done = True
                     break
                 elif status == "error":
                     with cpu_progress_placeholder.container():
                         st.error(upd.get("message", "CPU error"))
+                    with cpu_solving_placeholder.container():
+                        st.progress(0.0, text="❌ Error")
                     cpu_done = True
                     break
         except queue.Empty:
@@ -1763,6 +1871,44 @@ def run_progressive_rebalancing(
                 st.success(UIText.RACE_STARTED_CPU)
             gpu_started = False  # Reset to avoid repeated messages
             cpu_started = False
+
+        # Show elapsed-time solving bar in its own placeholder
+        now = time.time()
+        if now - last_idle_render_time >= 1.0:
+            last_idle_render_time = now
+            total_elapsed = now - loop_start_time
+            if not gpu_done:
+                if gpu_last_progress:
+                    elapsed = now - gpu_last_progress_time
+                    period = gpu_last_progress.get("period", 0)
+                    total = max(1, gpu_last_progress.get("total_periods", 1))
+                    value = gpu_last_progress.get("portfolio_value", 0.0)
+                    with gpu_solving_placeholder.container():
+                        st.progress(
+                            min(1.0, period / total),
+                            text=f"⏳ Period {period + 1}/{total} ({elapsed:.0f}s) · Portfolio: ${value:.3f} · Total: {total_elapsed:.0f}s",
+                        )
+                else:
+                    with gpu_solving_placeholder.container():
+                        st.progress(0.0, text=f"⏳ Waiting for GPU... ({total_elapsed:.0f}s)")
+            if not cpu_done:
+                if cpu_last_progress:
+                    elapsed = now - cpu_last_progress_time
+                    period = cpu_last_progress.get("period", 0)
+                    total = max(1, cpu_last_progress.get("total_periods", 1))
+                    value = cpu_last_progress.get("portfolio_value", 0.0)
+                    with cpu_solving_placeholder.container():
+                        st.progress(
+                            min(1.0, period / total),
+                            text=f"⏳ Period {period + 1}/{total} ({elapsed:.0f}s) · Portfolio: ${value:.3f} · Total: {total_elapsed:.0f}s",
+                        )
+                else:
+                    with cpu_solving_placeholder.container():
+                        st.progress(0.0, text=f"⏳ Waiting for CPU... ({total_elapsed:.0f}s)")
+
+        if not header_cleared and time.time() >= header_clear_time:
+            header_placeholder.empty()
+            header_cleared = True
 
         time.sleep(PerformanceParams.MAIN_LOOP_DELAY)
 
@@ -1799,9 +1945,10 @@ def main():
     # Mask toggle via query param: ?mask=false to show real names
     blog_mode = str(st.query_params.get("mask", "true")).lower() not in ("false", "0", "no")
 
-    # Header
-    st.markdown(
-        f'<div class="main-header">cuFOLIO - Unlocking Real-Time Backtesting</div>',
+    # Header (placed in a placeholder so it can be collapsed when the demo runs)
+    header_placeholder = st.empty()
+    header_placeholder.markdown(
+        '<div class="main-header">cuFOLIO - Unlocking Real-Time Backtesting</div>',
         unsafe_allow_html=True,
     )
 
@@ -2292,13 +2439,20 @@ def main():
 
         col_gpu, col_cpu = st.columns([1, 1], gap="medium")
         with col_gpu:
-            st.markdown("### 🚀 GPU (cuOpt) Results")
+            gpu_hdr_col, gpu_bar_col = st.columns([1, 2], gap="small")
+            with gpu_hdr_col:
+                st.markdown("### 🚀 GPU (cuOpt) Results")
+            with gpu_bar_col:
+                gpu_solving_placeholder = st.empty()
             gpu_plot_container = st.empty()
             gpu_heatmap_container = st.empty()
             gpu_progress_placeholder = st.empty()
         with col_cpu:
-            cpu_header = "### 🖥️ CPU Results"
-            st.markdown(cpu_header)
+            cpu_hdr_col, cpu_bar_col = st.columns([1, 2], gap="small")
+            with cpu_hdr_col:
+                st.markdown("### 🖥️ CPU Results")
+            with cpu_bar_col:
+                cpu_solving_placeholder = st.empty()
             cpu_plot_container = st.empty()
             cpu_heatmap_container = st.empty()
             cpu_progress_placeholder = st.empty()
@@ -2359,6 +2513,9 @@ def main():
             cpu_heatmap_container=cpu_heatmap_container,
             gpu_progress_placeholder=gpu_progress_placeholder,
             cpu_progress_placeholder=cpu_progress_placeholder,
+            gpu_solving_placeholder=gpu_solving_placeholder,
+            cpu_solving_placeholder=cpu_solving_placeholder,
+            header_placeholder=header_placeholder,
             cpu_solver_choice=cpu_solver_choice,
             blog_mode=blog_mode,
             notional=int(notional),
@@ -2379,12 +2536,17 @@ def main():
                 gt_solve = max(1e-9, g.get("total_solve_time", 0.0))
                 ct_solve = max(1e-9, c.get("total_solve_time", 0.0))
                 solve_speedup = ct_solve / gt_solve
-                st.metric("⚡ GPU Solver Speedup", f"{solve_speedup:.1f}x faster")
+                st.metric("⚡ Solver Speedup", f"{solve_speedup:.1f}x faster")
+                gt_elapsed = max(1e-9, g.get("total_elapsed_time", 0.0))
+                ct_elapsed = max(1e-9, c.get("total_elapsed_time", 0.0))
+                pipeline_speedup = ct_elapsed / gt_elapsed
+                st.metric("🚀 End-to-End Speedup", f"{pipeline_speedup:.1f}x faster")
             else:
                 st.error("Speedup calculation failed")
 
         with col2:
             if g.get("success"):
+                st.metric("🕐 GPU Pipeline Time", f"{g.get('total_elapsed_time', 0.0):.2f}s")
                 st.metric("⚡ GPU Solve Time", f"{g.get('total_solve_time', 0.0):.3f}s")
                 st.metric("🔬 GPU KDE Time", f"{g.get('total_kde_time', 0.0):.3f}s")
             else:
@@ -2392,6 +2554,7 @@ def main():
 
         with col3:
             if c.get("success"):
+                st.metric("🕐 CPU Pipeline Time", f"{c.get('total_elapsed_time', 0.0):.2f}s")
                 st.metric("⚡ CPU Solve Time", f"{c.get('total_solve_time', 0.0):.3f}s")
                 st.metric("🔬 CPU KDE Time", f"{c.get('total_kde_time', 0.0):.3f}s")
             else:

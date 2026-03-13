@@ -156,6 +156,7 @@ class PlotStyling:
 
     # Figure Parameters
     FIGURE_SIZE = (16, 12)  # Larger size for better detail
+    REBALANCING_FIGURE_SIZE = (16, 8)  # Shorter height so heatmap is visible below
     FIGURE_DPI = 200  # High resolution optimized for Streamlit (3200x2400 pixels)
 
     # Font Parameters
