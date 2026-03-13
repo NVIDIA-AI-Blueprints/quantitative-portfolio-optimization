@@ -140,8 +140,13 @@ st.markdown(
         background-color: rgba(118, 185, 0, 0.1) !important;
         border-left-color: #76b900 !important;
     }
+    @keyframes fadeIn {
+        from { opacity: 0.3; }
+        to   { opacity: 1; }
+    }
     div[data-testid="stPlotlyChart"] {
         border-radius: 8px;
+        animation: fadeIn 400ms cubic-bezier(0.4, 0, 0.2, 1);
     }
 </style>
 """,
@@ -312,7 +317,9 @@ def _build_portfolio_treemap(
         paper_bgcolor=_BG,
         plot_bgcolor=_BG,
         margin=dict(t=40, l=5, r=5, b=5),
-        height=550,
+        height=380,
+        autosize=True,
+        transition=dict(duration=400, easing="cubic-in-out"),
     )
 
     return fig
@@ -1689,6 +1696,8 @@ def run_progressive_rebalancing(
     cpu_final_time = None
     gpu_prev_weights = {}
     cpu_prev_weights = {}
+    gpu_reopt_snapshot = {}
+    cpu_reopt_snapshot = {}
 
     # Show initial waiting bars immediately
     with gpu_solving_placeholder.container():
@@ -1720,6 +1729,9 @@ def run_progressive_rebalancing(
                     _gpw = upd.get("portfolio_weights", {})
                     if _gpw:
                         try:
+                            if upd.get("reoptimized", False):
+                                gpu_prev_weights = gpu_reopt_snapshot.copy() if gpu_reopt_snapshot else {}
+                                gpu_reopt_snapshot = _gpw.copy()
                             _hfig = _build_portfolio_treemap(
                                 _gpw, "— GPU", notional=notional,
                                 mask_names=blog_mode, prev_weights=gpu_prev_weights,
@@ -1727,7 +1739,6 @@ def run_progressive_rebalancing(
                             gpu_heatmap_container.plotly_chart(
                                 _hfig, width="stretch",
                             )
-                            gpu_prev_weights = _gpw.copy()
                         except Exception:
                             pass
                 elif status == "period_plot_update" and not gpu_processed_plot:
@@ -1770,9 +1781,9 @@ def run_progressive_rebalancing(
                     gpu_final_time = upd.get("total_elapsed_time", time.time() - loop_start_time)
                     gpu_final_solve = upd.get("total_solve_time", 0.0)
                     with gpu_progress_placeholder.container():
-                        st.success(f"GPU pipeline completed in {gpu_final_time:.2f}s (solver: {gpu_final_solve:.2f}s)")
+                        st.success(f"GPU completed (solver: {gpu_final_solve:.2f}s)")
                     with gpu_solving_placeholder.container():
-                        st.progress(1.0, text=f"✅ Pipeline {gpu_final_time:.2f}s · Solver {gpu_final_solve:.2f}s")
+                        st.progress(1.0, text=f"✅ Solver {gpu_final_solve:.2f}s")
                     gpu_done = True
                     break
                 elif status == "error":
@@ -1804,6 +1815,9 @@ def run_progressive_rebalancing(
                     _cpw = upd.get("portfolio_weights", {})
                     if _cpw:
                         try:
+                            if upd.get("reoptimized", False):
+                                cpu_prev_weights = cpu_reopt_snapshot.copy() if cpu_reopt_snapshot else {}
+                                cpu_reopt_snapshot = _cpw.copy()
                             _hfig = _build_portfolio_treemap(
                                 _cpw, "— CPU", notional=notional,
                                 mask_names=blog_mode, prev_weights=cpu_prev_weights,
@@ -1811,7 +1825,6 @@ def run_progressive_rebalancing(
                             cpu_heatmap_container.plotly_chart(
                                 _hfig, width="stretch",
                             )
-                            cpu_prev_weights = _cpw.copy()
                         except Exception:
                             pass
                 elif status == "period_plot_update" and not cpu_processed_plot:
@@ -1848,9 +1861,9 @@ def run_progressive_rebalancing(
                     cpu_final_time = upd.get("total_elapsed_time", time.time() - loop_start_time)
                     cpu_final_solve = upd.get("total_solve_time", 0.0)
                     with cpu_progress_placeholder.container():
-                        st.success(f"CPU pipeline completed in {cpu_final_time:.2f}s (solver: {cpu_final_solve:.2f}s)")
+                        st.success(f"CPU completed (solver: {cpu_final_solve:.2f}s)")
                     with cpu_solving_placeholder.container():
-                        st.progress(1.0, text=f"✅ Pipeline {cpu_final_time:.2f}s · Solver {cpu_final_solve:.2f}s")
+                        st.progress(1.0, text=f"✅ Solver {cpu_final_solve:.2f}s")
                     cpu_done = True
                     break
                 elif status == "error":
@@ -1886,11 +1899,11 @@ def run_progressive_rebalancing(
                     with gpu_solving_placeholder.container():
                         st.progress(
                             min(1.0, period / total),
-                            text=f"⏳ Period {period + 1}/{total} ({elapsed:.0f}s) · Portfolio: ${value:.3f} · Total: {total_elapsed:.0f}s",
+                            text=f"⏳ Period {period + 1}/{total} · Portfolio: ${value:.3f}",
                         )
                 else:
                     with gpu_solving_placeholder.container():
-                        st.progress(0.0, text=f"⏳ Waiting for GPU... ({total_elapsed:.0f}s)")
+                        st.progress(0.0, text="⏳ Waiting for GPU...")
             if not cpu_done:
                 if cpu_last_progress:
                     elapsed = now - cpu_last_progress_time
@@ -1900,11 +1913,11 @@ def run_progressive_rebalancing(
                     with cpu_solving_placeholder.container():
                         st.progress(
                             min(1.0, period / total),
-                            text=f"⏳ Period {period + 1}/{total} ({elapsed:.0f}s) · Portfolio: ${value:.3f} · Total: {total_elapsed:.0f}s",
+                            text=f"⏳ Period {period + 1}/{total} · Portfolio: ${value:.3f}",
                         )
                 else:
                     with cpu_solving_placeholder.container():
-                        st.progress(0.0, text=f"⏳ Waiting for CPU... ({total_elapsed:.0f}s)")
+                        st.progress(0.0, text="⏳ Waiting for CPU...")
 
         if not header_cleared and time.time() >= header_clear_time:
             header_placeholder.empty()
@@ -2266,13 +2279,7 @@ def main():
             "through the backtest in real time."
         )
         if gif_path.exists():
-            import base64
-            gif_bytes = gif_path.read_bytes()
-            gif_b64 = base64.b64encode(gif_bytes).decode()
-            st.markdown(
-                f'<img src="data:image/gif;base64,{gif_b64}" style="width:100%;">',
-                unsafe_allow_html=True,
-            )
+            st.image(str(gif_path), use_container_width=True)
             st.caption(
                 "Using the cuOpt GPU solver (left), you can test rebalancing "
                 "strategies much faster than using a CPU solver (right) — shown at 4x speed."
@@ -2439,20 +2446,14 @@ def main():
 
         col_gpu, col_cpu = st.columns([1, 1], gap="medium")
         with col_gpu:
-            gpu_hdr_col, gpu_bar_col = st.columns([1, 2], gap="small")
-            with gpu_hdr_col:
-                st.markdown("### 🚀 GPU (cuOpt) Results")
-            with gpu_bar_col:
-                gpu_solving_placeholder = st.empty()
+            st.markdown("### 🚀 GPU (cuOpt) Results")
+            gpu_solving_placeholder = st.empty()
             gpu_plot_container = st.empty()
             gpu_heatmap_container = st.empty()
             gpu_progress_placeholder = st.empty()
         with col_cpu:
-            cpu_hdr_col, cpu_bar_col = st.columns([1, 2], gap="small")
-            with cpu_hdr_col:
-                st.markdown("### 🖥️ CPU Results")
-            with cpu_bar_col:
-                cpu_solving_placeholder = st.empty()
+            st.markdown("### 🖥️ CPU Results")
+            cpu_solving_placeholder = st.empty()
             cpu_plot_container = st.empty()
             cpu_heatmap_container = st.empty()
             cpu_progress_placeholder = st.empty()
