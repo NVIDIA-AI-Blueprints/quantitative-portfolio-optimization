@@ -2253,11 +2253,18 @@ def main():
             f"""<script>
             (function() {{
                 function go() {{
-                    var tabs = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
-                    if (tabs.length > {index}) {{ tabs[{index}].click(); }}
-                    else {{ setTimeout(go, 50); }}
+                    var doc = window.parent.document;
+                    var tabs = doc.querySelectorAll('[data-baseweb="tab"]');
+                    if (tabs.length === 0) {{
+                        tabs = doc.querySelectorAll('button[role="tab"]');
+                    }}
+                    if (tabs.length > {index}) {{
+                        tabs[{index}].click();
+                    }} else {{
+                        setTimeout(go, 50);
+                    }}
                 }}
-                go();
+                setTimeout(go, 100);
             }})();
             </script>""",
             height=0,
@@ -2394,8 +2401,8 @@ def main():
 
     # Run optimization when button is pressed
     if run_btn:
-      _inject_tab_switch(2)
       with tab_demo:
+        _inject_tab_switch(2)
         dataset_path = workspace_root / "data" / "stock_data" / f"{dataset_name}.csv"
         if not dataset_path.exists():
             st.error(f"❌ Dataset not found: {dataset_path}")
