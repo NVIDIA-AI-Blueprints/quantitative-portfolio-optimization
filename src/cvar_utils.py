@@ -94,13 +94,15 @@ def generate_samples_kde(
             print(f"KDE fit on CPU in {kde_time} seconds.")
 
     elif kde_device == "GPU":
-        # Lazy import to avoid loading CUDA libraries on module import
+        import cuml
         import cuml.neighbors
+
         start_time = time.time()
-        kde = cuml.neighbors.KernelDensity(kernel=kernel, bandwidth=bandwidth).fit(
-            returns_data
-        )
-        new_samples = kde.sample(num_scen) 
+        with cuml.using_output_type("numpy"):
+            kde = cuml.neighbors.KernelDensity(
+                kernel=kernel, bandwidth=bandwidth
+            ).fit(returns_data)
+            new_samples = kde.sample(num_scen)
 
         end_time = time.time()
         kde_time = end_time - start_time
