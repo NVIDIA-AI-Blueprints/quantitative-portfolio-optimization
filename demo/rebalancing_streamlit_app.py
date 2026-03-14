@@ -317,7 +317,7 @@ def _build_portfolio_treemap(
             text=custom_text,
             texttemplate="<b>%{label}</b><br>%{text}",
             hovertemplate=hover_texts,
-            textfont=dict(size=10, color=text_colors, family="Arial Black"),
+            textfont=dict(size=13, color=text_colors, family="Arial Black"),
             pathbar=dict(visible=False),
             tiling=dict(packing="squarify", pad=3),
         )
@@ -327,7 +327,7 @@ def _build_portfolio_treemap(
         paper_bgcolor=_BG,
         plot_bgcolor=_BG,
         margin=dict(t=5, l=5, r=5, b=5),
-        height=380,
+        height=450,
         autosize=True,
         transition=dict(duration=400, easing="cubic-in-out"),
     )
@@ -430,8 +430,8 @@ def _build_rebalancing_plotly(
             xanchor="left",
             yanchor="top",
         ),
-        height=500,
-        margin=dict(l=60, r=20, t=40, b=30),
+        height=380,
+        margin=dict(l=50, r=15, t=30, b=25),
         hovermode="x unified",
     )
     return fig
@@ -476,12 +476,12 @@ def _render_treemap_png(weights_dict, title="", notional=100_000_000,
         colors.append(_gold + (0.9,))
 
     with _matplotlib_lock:
-        fig, ax = plt.subplots(figsize=(14, 6), dpi=200, facecolor="#000000")
+        fig, ax = plt.subplots(figsize=(12, 5), dpi=200, facecolor="#000000")
         ax.set_facecolor("#000000")
         if sizes:
             squarify.plot(
                 sizes=sizes, label=labels, color=colors, alpha=0.9, ax=ax,
-                text_kwargs={"fontsize": 8, "color": "white", "fontweight": "bold"},
+                text_kwargs={"fontsize": 11, "color": "white", "fontweight": "bold"},
                 bar_kwargs={"linewidth": 2, "edgecolor": "#000000"},
             )
         if title:
@@ -500,7 +500,7 @@ def _render_rebalancing_frame(
 ):
     """Render a rebalancing chart frame as PNG bytes for smooth animation."""
     with _matplotlib_lock:
-        fig, ax = plt.subplots(figsize=(14, 6), dpi=200, facecolor="#000000")
+        fig, ax = plt.subplots(figsize=(12, 5), dpi=200, facecolor="#000000")
         ax.set_facecolor("#000000")
 
         if bh_dates and bh_values:
