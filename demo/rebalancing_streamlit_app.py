@@ -430,7 +430,7 @@ def _build_rebalancing_plotly(
             xanchor="left",
             yanchor="top",
         ),
-        height=300,
+        height=500,
         margin=dict(l=60, r=20, t=40, b=30),
         hovermode="x unified",
     )
@@ -476,7 +476,7 @@ def _render_treemap_png(weights_dict, title="", notional=100_000_000,
         colors.append(_gold + (0.9,))
 
     with _matplotlib_lock:
-        fig, ax = plt.subplots(figsize=(10, 5), dpi=80, facecolor="#000000")
+        fig, ax = plt.subplots(figsize=(14, 6), dpi=200, facecolor="#000000")
         ax.set_facecolor("#000000")
         if sizes:
             squarify.plot(
@@ -500,7 +500,7 @@ def _render_rebalancing_frame(
 ):
     """Render a rebalancing chart frame as PNG bytes for smooth animation."""
     with _matplotlib_lock:
-        fig, ax = plt.subplots(figsize=(10, 4.75), dpi=80, facecolor="#000000")
+        fig, ax = plt.subplots(figsize=(14, 6), dpi=200, facecolor="#000000")
         ax.set_facecolor("#000000")
 
         if bh_dates and bh_values:

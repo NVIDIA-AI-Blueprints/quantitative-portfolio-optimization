@@ -969,7 +969,7 @@ def main():
                 with col_s3:
                     st.metric("To", df_filtered.index.max().strftime("%Y-%m-%d"))
 
-                fig_preview, ax_preview = plt.subplots(figsize=(14, 5), dpi=150)
+                fig_preview, ax_preview = plt.subplots(figsize=(14, 5), dpi=200)
                 normalised = df_filtered.div(df_filtered.iloc[0])
                 for col in normalised.columns:
                     ax_preview.plot(normalised.index, normalised[col], linewidth=0.8, alpha=0.7)
