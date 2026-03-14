@@ -20,9 +20,10 @@ Two demo apps:
 
 - **CVXPY** — convex optimization modeling framework (CPU solvers: HiGHS, CLARABEL)
 - **Streamlit** — interactive web application framework
-- **scikit-learn** — CPU-based KDE (fallback when GPU unavailable)
-- **matplotlib / seaborn** — real-time plotting
+- **Plotly** — interactive charts (rebalancing backtest, dataset visualization)
 - **squarify** — treemap visualization for live portfolio heatmap
+- **scikit-learn** — CPU-based KDE (fallback when GPU unavailable)
+- **matplotlib / seaborn** — animation frame rendering
 
 ---
 
@@ -57,11 +58,12 @@ quantitative-portfolio-optimization/
 │   ├── cvar_streamlit_app.py          # Portfolio optimizer app
 │   ├── rebalancing_streamlit_app.py   # Rebalancing strategies app
 │   ├── app_parameters.py             # Shared UI parameters
+│   ├── requirements.txt              # Demo-specific dependencies
 │   └── diagrams/                     # Images, GIFs, QR codes
 ├── src/                              # cuFOLIO core library
 ├── data/stock_data/                  # Stock price CSV datasets
 ├── notebooks/                        # Jupyter notebooks
-├── .streamlit/config.toml            # NVIDIA dark theme
+├── .streamlit/config.toml            # NVIDIA dark theme + developer toolbar
 └── pyproject.toml                    # Package config
 ```
 
@@ -69,20 +71,23 @@ quantitative-portfolio-optimization/
 
 ```bash
 # Clone the repository
-git clone https://github.com/phuo-nv/quantitative-portfolio-optimization.git
+git clone https://github.com/NVIDIA-AI-Blueprints/quantitative-portfolio-optimization.git
 cd quantitative-portfolio-optimization
 
 # Create virtual environment
-python3.12 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 
-# Install with GPU support + Streamlit demo
-pip install -e ".[demo,cuda12]"    # For CUDA 12
-# or
-pip install -e ".[demo,cuda13]"    # For CUDA 13
+# Install core package
+pip install -e .
 
-# CPU-only (no GPU)
-pip install -e ".[demo]"
+# Install GPU support
+pip install -e ".[cuda12]"    # For CUDA 12
+# or
+pip install -e ".[cuda13]"    # For CUDA 13
+
+# Install demo dependencies
+pip install -r demo/requirements.txt
 ```
 
 ### Startup
@@ -90,14 +95,11 @@ pip install -e ".[demo]"
 ```bash
 source .venv/bin/activate
 
-# Portfolio Optimizer
-streamlit run demo/cvar_streamlit_app.py
-
-# Rebalancing Strategies
+# Rebalancing Strategies (main demo)
 streamlit run demo/rebalancing_streamlit_app.py
 
-# Efficient Frontier
-streamlit run demo/efficient_frontier_streamlit_app.py
+# Portfolio Optimizer
+streamlit run demo/cvar_streamlit_app.py
 ```
 
 App opens at `http://localhost:8501` by default.
@@ -107,9 +109,8 @@ App opens at `http://localhost:8501` by default.
 ## Performance Tuning
 
 - **Scenario count**: 5,000–10,000 for live demos (fast); 20,000+ for accuracy
-- **Dataset size**: sp100 (~100 assets) for quick demos; sp500 (~400 assets) for GPU speedup showcase
+- **Dataset size**: dow30 (~30 assets) for quick demos; sp500 (~400 assets) for GPU speedup showcase
 - **Look-forward window**: 21 days (monthly) for moderate demo length; 63 days (quarterly) for shorter runs
-- **cuOpt solver mode**: PDLP "Fast1" for speed demos; "Stable2" for accuracy
 - **CPU solver**: HiGHS (fastest CPU baseline) or CLARABEL (interior point)
 
 Typical solve times (sp500, 10k scenarios, B200 GPU):
@@ -124,11 +125,11 @@ Typical solve times (sp500, 10k scenarios, B200 GPU):
 
 **Sidebar controls:**
 - Dataset selector (masked as Dataset 1, 2, … by default)
-- Date range (start/end)
+- Date range (start/end, constrained to dataset availability)
 - Portfolio allocation range slider (min/max weight)
 - Cash reserve range slider
 - Max leverage slider
-- Risk sensitivity slider
+- Risk sensitivity slider (default 1.2)
 - Tail-risk confidence slider
 - Simulation count slider (5k–20k)
 - Rebalancing trigger selector (loss threshold, drift, drawdown, buy & hold)
@@ -138,17 +139,19 @@ Typical solve times (sp500, 10k scenarios, B200 GPU):
 
 **Main panel tabs:**
 - Overview — intro + animated GIF demo
-- Dataset — normalised price chart for selected date range
+- Dataset — interactive normalized price chart and returns chart (Plotly, dark theme)
 - Live Demo — GPU vs CPU side-by-side progressive results with live portfolio heatmap
 - Architecture — pipeline diagram
 - Benchmarks — B200 performance chart
 - References — GTC workshop QR codes + academic citations
 
-**Live portfolio heatmap:**
-- Treemap visualization of portfolio composition, updated every rebalancing period
-- Rectangle sizes correspond to asset weights; dollar amounts based on configurable notional
+**Live demo features:**
+- Smooth day-by-day animation using matplotlib static frames (no flashing)
+- Both buy & hold and rebalancing lines progress in sync
+- Each solver independently switches to interactive Plotly chart when done
+- Live treemap heatmap showing portfolio composition updated every rebalancing period
 - NVIDIA brand color palette: green gradient for long positions, red for shorts, gold for cash
-- Displayed side-by-side for both GPU and CPU solvers below the backtest charts
+- Post-run detailed results with date selector to browse portfolio heatmaps per period
 
 **Name masking:**
 - Dataset and ticker names are masked by default to avoid specific financial suggestions
@@ -168,7 +171,7 @@ Typical solve times (sp500, 10k scenarios, B200 GPU):
               |                       |
         [GPU Thread]           [CPU Subprocess]
         cuOpt + cuML KDE      HiGHS/CLARABEL + sklearn KDE
-        (main process)        (isolated process)
+        (main process)        (spawn-isolated process)
 ```
 
 ---
