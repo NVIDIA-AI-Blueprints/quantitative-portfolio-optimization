@@ -442,7 +442,7 @@ def _render_rebalancing_frame(
 ):
     """Render a rebalancing chart frame as PNG bytes for smooth animation."""
     with _matplotlib_lock:
-        fig, ax = plt.subplots(figsize=(8, 4), dpi=80, facecolor="#000000")
+        fig, ax = plt.subplots(figsize=(10, 4.75), dpi=80, facecolor="#000000")
         ax.set_facecolor("#000000")
 
         if bh_dates and bh_values:
