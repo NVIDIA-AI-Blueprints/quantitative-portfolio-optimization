@@ -336,7 +336,8 @@ def _build_portfolio_treemap(
 
 
 def _build_rebalancing_plotly(
-    cum_dates, cum_values, bh_dates, bh_values, rebal_dates=None, title_suffix=""
+    cum_dates, cum_values, bh_dates, bh_values, rebal_dates=None, title_suffix="",
+    yaxis_range=None,
 ):
     """Build an interactive Plotly chart for the rebalancing backtest."""
     import plotly.graph_objects as go
@@ -421,6 +422,7 @@ def _build_rebalancing_plotly(
             showgrid=True,
             color="#aaa",
             title="Cumulative Portfolio Value",
+            range=yaxis_range,
         ),
         legend=dict(
             font=dict(color="#ccc", size=10),
@@ -476,7 +478,7 @@ def _render_treemap_png(weights_dict, title="", notional=100_000_000,
         colors.append(_gold + (0.9,))
 
     with _matplotlib_lock:
-        fig, ax = plt.subplots(figsize=(12, 5), dpi=200, facecolor="#000000")
+        fig, ax = plt.subplots(figsize=(12, 5), dpi=300, facecolor="#000000")
         ax.set_facecolor("#000000")
         if sizes:
             squarify.plot(
@@ -496,11 +498,12 @@ def _render_treemap_png(weights_dict, title="", notional=100_000_000,
 
 
 def _render_rebalancing_frame(
-    cum_dates, cum_values, bh_dates, bh_values, rebal_dates=None, title_suffix=""
+    cum_dates, cum_values, bh_dates, bh_values, rebal_dates=None, title_suffix="",
+    yaxis_range=None,
 ):
     """Render a rebalancing chart frame as PNG bytes for smooth animation."""
     with _matplotlib_lock:
-        fig, ax = plt.subplots(figsize=(12, 5), dpi=200, facecolor="#000000")
+        fig, ax = plt.subplots(figsize=(12, 5), dpi=300, facecolor="#000000")
         ax.set_facecolor("#000000")
 
         if bh_dates and bh_values:
@@ -551,6 +554,8 @@ def _render_rebalancing_frame(
         ax.grid(True, alpha=0.15, color="#333")
         for spine in ax.spines.values():
             spine.set_visible(False)
+        if yaxis_range is not None:
+            ax.set_ylim(yaxis_range)
         if cum_dates or bh_dates:
             ax.legend(fontsize=7, loc="upper left", frameon=False, labelcolor="#ccc")
         fig.tight_layout(pad=0.8)
@@ -2429,6 +2434,21 @@ def run_progressive_rebalancing(
         _gpu_anim_done = gpu_display_idx >= _gpu_total and _gpu_total > 0
         _cpu_anim_done = cpu_display_idx >= _cpu_total and _cpu_total > 0
 
+        # Compute shared y-axis range for consistent GPU vs CPU comparison
+        _all_vals = (
+            gpu_plot_data["cum_values"]
+            + gpu_plot_data["bh_values"]
+            + cpu_plot_data["cum_values"]
+            + cpu_plot_data["bh_values"]
+        )
+        if _all_vals:
+            _y_min = min(_all_vals)
+            _y_max = max(_all_vals)
+            _y_pad = (_y_max - _y_min) * 0.05 if _y_max > _y_min else 0.01
+            _shared_yrange = [_y_min - _y_pad, _y_max + _y_pad]
+        else:
+            _shared_yrange = None
+
         # GPU: animate or switch to interactive Plotly when done
         if gpu_done and _gpu_anim_done and not gpu_plotly_rendered:
             gpu_plot_container.plotly_chart(
@@ -2439,6 +2459,7 @@ def run_progressive_rebalancing(
                     gpu_plot_data["bh_values"],
                     gpu_plot_data["rebal_dates"],
                     "— GPU",
+                    yaxis_range=_shared_yrange,
                 ),
                 width="stretch",
                 key=_next_key("gpu_plot"),
@@ -2457,6 +2478,7 @@ def run_progressive_rebalancing(
                     gpu_plot_data["bh_values"][:_bh_idx],
                     gpu_plot_data["rebal_dates"],
                     "— GPU",
+                    yaxis_range=_shared_yrange,
                 ),
                 width="stretch",
             )
@@ -2471,6 +2493,7 @@ def run_progressive_rebalancing(
                     cpu_plot_data["bh_values"],
                     cpu_plot_data["rebal_dates"],
                     "— CPU",
+                    yaxis_range=_shared_yrange,
                 ),
                 width="stretch",
                 key=_next_key("cpu_plot"),
@@ -2489,6 +2512,7 @@ def run_progressive_rebalancing(
                     cpu_plot_data["bh_values"][:_bh_idx],
                     cpu_plot_data["rebal_dates"],
                     "— CPU",
+                    yaxis_range=_shared_yrange,
                 ),
                 width="stretch",
             )
