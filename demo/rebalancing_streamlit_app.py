@@ -3309,7 +3309,8 @@ def main():
                         notional=_disp_notional,
                         mask_names=_disp_blog_mode,
                     )
-                    st.plotly_chart(_hfig, width="stretch", key=f"ptf_hm_{label}_{idx}")
+                    _png = _hfig.to_image(format="png", width=800, height=400)
+                    st.image(_png, width="stretch")
 
         with st.expander("📋 Detailed Period Results", expanded=False):
             _render_period_table("GPU Period Results", g)
