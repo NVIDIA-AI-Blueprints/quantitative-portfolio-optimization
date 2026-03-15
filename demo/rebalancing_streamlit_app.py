@@ -432,7 +432,6 @@ def _build_rebalancing_plotly(
             xanchor="left",
             yanchor="top",
         ),
-        height=275,
         margin=dict(l=50, r=15, t=30, b=25),
         hovermode="x unified",
     )
@@ -2439,12 +2438,12 @@ def run_progressive_rebalancing(
         else:
             _shared_yrange = None
 
-        # GPU: animate or switch to interactive Plotly when done
+        # GPU: animate then show final static frame when done
         _gpu_remaining = max(1, _gpu_total - gpu_display_idx)
         _gpu_step = max(_DAYS_PER_FRAME, _gpu_remaining // 10) if gpu_done else _DAYS_PER_FRAME
         if gpu_done and _gpu_anim_done and not gpu_plotly_rendered:
-            gpu_plot_container.plotly_chart(
-                _build_rebalancing_plotly(
+            gpu_plot_container.image(
+                _render_rebalancing_frame(
                     gpu_plot_data["cum_dates"],
                     gpu_plot_data["cum_values"],
                     gpu_plot_data["bh_dates"],
@@ -2454,7 +2453,6 @@ def run_progressive_rebalancing(
                     yaxis_range=_shared_yrange,
                 ),
                 width="stretch",
-                key=_next_key("gpu_plot"),
             )
             gpu_plotly_rendered = True
         elif not _gpu_anim_done and (
@@ -2475,12 +2473,12 @@ def run_progressive_rebalancing(
                 width="stretch",
             )
 
-        # CPU: animate or switch to interactive Plotly when done
+        # CPU: animate then show final static frame when done
         _cpu_remaining = max(1, _cpu_total - cpu_display_idx)
         _cpu_step = max(_DAYS_PER_FRAME, _cpu_remaining // 10) if cpu_done else _DAYS_PER_FRAME
         if cpu_done and _cpu_anim_done and not cpu_plotly_rendered:
-            cpu_plot_container.plotly_chart(
-                _build_rebalancing_plotly(
+            cpu_plot_container.image(
+                _render_rebalancing_frame(
                     cpu_plot_data["cum_dates"],
                     cpu_plot_data["cum_values"],
                     cpu_plot_data["bh_dates"],
@@ -2490,7 +2488,6 @@ def run_progressive_rebalancing(
                     yaxis_range=_shared_yrange,
                 ),
                 width="stretch",
-                key=_next_key("cpu_plot"),
             )
             cpu_plotly_rendered = True
         elif not _cpu_anim_done and (
