@@ -2116,58 +2116,11 @@ def run_progressive_rebalancing(
         daemon=True,
     )
 
-    # Start GPU thread, then CPU subprocess (fully isolated)
+    # Start everything and signal immediately for a fair race
     gpu_thread.start()
     cpu_process.start()
     cpu_bridge.start()
-
-    # Wait for both solvers to signal "ready" before starting the race
-    _gpu_ready = False
-    _cpu_ready = False
-    _sync_timeout = time.time() + 120  # 2 minute max wait
-    while not (_gpu_ready and _cpu_ready) and time.time() < _sync_timeout:
-        try:
-            while True:
-                upd = gpu_progress_q.get_nowait()
-                if upd.get("status") == "ready":
-                    _gpu_ready = True
-                    with gpu_progress_placeholder.container():
-                        st.info(upd.get("message", ""))
-                    gpu_progress_q.put(upd)  # re-queue for main loop
-                    break
-                elif upd.get("status") in ("initializing",):
-                    with gpu_progress_placeholder.container():
-                        st.info(upd.get("message", ""))
-                else:
-                    gpu_progress_q.put(upd)
-                    break
-        except queue.Empty:
-            pass
-        try:
-            while True:
-                upd = cpu_progress_q.get_nowait()
-                if upd.get("status") == "ready":
-                    _cpu_ready = True
-                    with cpu_progress_placeholder.container():
-                        st.info(upd.get("message", ""))
-                    cpu_progress_q.put(upd)
-                    break
-                elif upd.get("status") in ("initializing",):
-                    with cpu_progress_placeholder.container():
-                        st.info(upd.get("message", ""))
-                else:
-                    cpu_progress_q.put(upd)
-                    break
-        except queue.Empty:
-            pass
-        time.sleep(0.1)
-
-    with gpu_progress_placeholder.container():
-        st.success("🚀 GPU ready — starting race!")
-    with cpu_progress_placeholder.container():
-        st.success("🖥️ CPU ready — starting race!")
-
-    start_event.set()  # Signal both to start simultaneously
+    start_event.set()
 
     # Track completion status
     gpu_done = False
