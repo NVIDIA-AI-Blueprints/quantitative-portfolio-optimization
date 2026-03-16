@@ -1171,41 +1171,27 @@ def create_rebalancing_progressive(
                 }
                 _pw["cash"] = float(current_portfolio.cash)
 
-            # Progress update (every period)
+            # Single merged update per period: progress + plot data + weights
             progress_queue.put(
                 {
                     "solver": solver_name,
-                    "status": "period_progress",
+                    "status": "period_update",
                     "period": period_counter,
                     "total_periods": total_periods,
                     "reoptimized": bool(reopt_triggered),
                     "solve_time": solve_time,
                     "total_solve_time": total_solve_time,
                     "total_elapsed_time": current_total_time,
-                    "metric": reopt_metric,
                     "portfolio_value": float(portfolio_value),
                     "portfolio_weights": _pw,
+                    "cum_dates": [str(d) for d in cumulative_dates],
+                    "cum_values": cumulative_values.tolist(),
+                    "bh_dates": [str(d) for d in bh_series.index],
+                    "bh_values": bh_series.values.tolist(),
+                    "rebal_dates": [str(d) for d in rebal_dates],
                     "message": f"{solver_name}: Period {period_counter}/{total_periods} | Re-opt: {'Yes' if reopt_triggered else 'No'}",
                 }
             )
-
-            # Plot update (controlled frequency) — send raw data for Plotly rendering
-            if (
-                period_counter % max(1, PerformanceParams.PLOT_UPDATE_FREQUENCY) == 0
-            ) or (period_counter == total_periods):
-                progress_queue.put(
-                    {
-                        "solver": solver_name,
-                        "status": "period_plot_update",
-                        "cum_dates": [str(d) for d in cumulative_dates],
-                        "cum_values": cumulative_values.tolist(),
-                        "bh_dates": [str(d) for d in bh_series.index],
-                        "bh_values": bh_series.values.tolist(),
-                        "rebal_dates": [str(d) for d in rebal_dates],
-                        "period": period_counter,
-                        "total_periods": total_periods,
-                    }
-                )
 
             # Advance
             backtest_idx += look_forward_window
@@ -1895,7 +1881,7 @@ def cpu_bridge_thread(
             st_progress_q.put(
                 {
                     "solver": solver_name,
-                    "status": "period_progress",
+                    "status": "period_update",
                     "period": msg["period"],
                     "total_periods": msg["total_periods"],
                     "reoptimized": msg.get("reoptimized", False),
@@ -1904,20 +1890,12 @@ def cpu_bridge_thread(
                     "total_elapsed_time": msg.get("total_elapsed_time", 0),
                     "portfolio_value": msg.get("portfolio_value", 0),
                     "portfolio_weights": msg.get("portfolio_weights", {}),
-                    "message": msg.get("message", ""),
-                }
-            )
-            st_progress_q.put(
-                {
-                    "solver": solver_name,
-                    "status": "period_plot_update",
                     "cum_dates": msg["cumulative_dates"],
                     "cum_values": msg["cumulative_values"],
                     "bh_dates": bh_index,
                     "bh_values": bh_values,
                     "rebal_dates": msg["rebal_dates"],
-                    "period": msg["period"],
-                    "total_periods": msg["total_periods"],
+                    "message": msg.get("message", ""),
                 }
             )
 
@@ -2162,7 +2140,6 @@ def run_progressive_rebalancing(
     cpu_display_idx = 0
     gpu_plotly_rendered = False
     cpu_plotly_rendered = False
-    _DAYS_PER_FRAME = 10
 
     # Show initial waiting bars immediately
     with gpu_solving_placeholder.container():
@@ -2184,13 +2161,35 @@ def run_progressive_rebalancing(
                 if status in ("initializing", "ready", "starting"):
                     with gpu_progress_placeholder.container():
                         st.info(upd.get("message", ""))
-                elif status == "period_progress":
+                elif status == "period_update":
                     gpu_had_update = True
                     gpu_last_progress_time = time.time()
                     gpu_last_progress = upd
+                    # 1) Update plot data
+                    gpu_plot_data = {
+                        "cum_dates": upd.get("cum_dates", []),
+                        "cum_values": upd.get("cum_values", []),
+                        "bh_dates": upd.get("bh_dates", []),
+                        "bh_values": upd.get("bh_values", []),
+                        "rebal_dates": upd.get("rebal_dates", []),
+                    }
+                    gpu_display_idx = len(gpu_plot_data["cum_dates"])
+                    # 2) Render animation frame
+                    gpu_plot_container.image(
+                        _render_rebalancing_frame(
+                            gpu_plot_data["cum_dates"],
+                            gpu_plot_data["cum_values"],
+                            gpu_plot_data["bh_dates"],
+                            gpu_plot_data["bh_values"],
+                            gpu_plot_data["rebal_dates"],
+                            "— GPU",
+                        ),
+                        width="stretch",
+                    )
+                    # 3) Update progress text
                     with gpu_progress_placeholder.container():
                         st.info(upd.get("message", ""))
-                    # Live heatmap update
+                    # 4) Update heatmap (sync with plot)
                     _gpw = upd.get("portfolio_weights", {})
                     if _gpw:
                         try:
@@ -2215,14 +2214,6 @@ def run_progressive_rebalancing(
                             )
                         except Exception:
                             pass
-                elif status == "period_plot_update":
-                    gpu_plot_data = {
-                        "cum_dates": upd.get("cum_dates", []),
-                        "cum_values": upd.get("cum_values", []),
-                        "bh_dates": upd.get("bh_dates", []),
-                        "bh_values": upd.get("bh_values", []),
-                        "rebal_dates": upd.get("rebal_dates", []),
-                    }
                 elif status == "plot_ready":
                     gpu_plot_data["bh_dates"] = upd.get("bh_dates", [])
                     gpu_plot_data["bh_values"] = upd.get("bh_values", [])
@@ -2281,13 +2272,35 @@ def run_progressive_rebalancing(
                 if status in ("initializing", "ready", "starting"):
                     with cpu_progress_placeholder.container():
                         st.info(upd.get("message", ""))
-                elif status == "period_progress":
+                elif status == "period_update":
                     cpu_had_update = True
                     cpu_last_progress_time = time.time()
                     cpu_last_progress = upd
+                    # 1) Update plot data
+                    cpu_plot_data = {
+                        "cum_dates": upd.get("cum_dates", []),
+                        "cum_values": upd.get("cum_values", []),
+                        "bh_dates": upd.get("bh_dates", []),
+                        "bh_values": upd.get("bh_values", []),
+                        "rebal_dates": upd.get("rebal_dates", []),
+                    }
+                    cpu_display_idx = len(cpu_plot_data["cum_dates"])
+                    # 2) Render animation frame
+                    cpu_plot_container.image(
+                        _render_rebalancing_frame(
+                            cpu_plot_data["cum_dates"],
+                            cpu_plot_data["cum_values"],
+                            cpu_plot_data["bh_dates"],
+                            cpu_plot_data["bh_values"],
+                            cpu_plot_data["rebal_dates"],
+                            "— CPU",
+                        ),
+                        width="stretch",
+                    )
+                    # 3) Update progress text
                     with cpu_progress_placeholder.container():
                         st.info(upd.get("message", ""))
-                    # Live heatmap update
+                    # 4) Update heatmap (sync with plot)
                     _cpw = upd.get("portfolio_weights", {})
                     if _cpw:
                         try:
@@ -2312,14 +2325,6 @@ def run_progressive_rebalancing(
                             )
                         except Exception:
                             pass
-                elif status == "period_plot_update":
-                    cpu_plot_data = {
-                        "cum_dates": upd.get("cum_dates", []),
-                        "cum_values": upd.get("cum_values", []),
-                        "bh_dates": upd.get("bh_dates", []),
-                        "bh_values": upd.get("bh_values", []),
-                        "rebal_dates": upd.get("rebal_dates", []),
-                    }
                 elif status == "plot_ready":
                     cpu_plot_data["bh_dates"] = upd.get("bh_dates", [])
                     cpu_plot_data["bh_values"] = upd.get("bh_values", [])
@@ -2415,15 +2420,7 @@ def run_progressive_rebalancing(
             header_placeholder.empty()
             header_cleared = True
 
-        # Smooth animation: render as static image, both lines progress in sync
-        _gpu_total = len(gpu_plot_data["cum_dates"])
-        _cpu_total = len(cpu_plot_data["cum_dates"])
-        _gpu_bh_total = len(gpu_plot_data["bh_dates"])
-        _cpu_bh_total = len(cpu_plot_data["bh_dates"])
-        _gpu_anim_done = gpu_display_idx >= _gpu_total and _gpu_total > 0
-        _cpu_anim_done = cpu_display_idx >= _cpu_total and _cpu_total > 0
-
-        # Compute shared y-axis range for consistent GPU vs CPU comparison
+        # When solver completes, show final interactive Plotly chart
         _all_vals = (
             gpu_plot_data["cum_values"]
             + gpu_plot_data["bh_values"]
@@ -2438,10 +2435,7 @@ def run_progressive_rebalancing(
         else:
             _shared_yrange = None
 
-        # GPU: animate then switch to interactive Plotly when done
-        _gpu_remaining = max(1, _gpu_total - gpu_display_idx)
-        _gpu_step = max(_DAYS_PER_FRAME, _gpu_remaining // 5) if gpu_done else _DAYS_PER_FRAME
-        if gpu_done and _gpu_anim_done and not gpu_plotly_rendered:
+        if gpu_done and not gpu_plotly_rendered and gpu_plot_data["cum_dates"]:
             gpu_plot_container.plotly_chart(
                 _build_rebalancing_plotly(
                     gpu_plot_data["cum_dates"],
@@ -2456,28 +2450,8 @@ def run_progressive_rebalancing(
                 key=_next_key("gpu_plot"),
             )
             gpu_plotly_rendered = True
-        elif not _gpu_anim_done and (
-            gpu_display_idx < _gpu_total or (gpu_display_idx == 0 and _gpu_bh_total > 0)
-        ):
-            gpu_display_idx = min(gpu_display_idx + _gpu_step, _gpu_total)
-            _bh_idx = min(gpu_display_idx, _gpu_bh_total)
-            gpu_plot_container.image(
-                _render_rebalancing_frame(
-                    gpu_plot_data["cum_dates"][:gpu_display_idx],
-                    gpu_plot_data["cum_values"][:gpu_display_idx],
-                    gpu_plot_data["bh_dates"][:_bh_idx],
-                    gpu_plot_data["bh_values"][:_bh_idx],
-                    gpu_plot_data["rebal_dates"],
-                    "— GPU",
-                    yaxis_range=_shared_yrange,
-                ),
-                width="stretch",
-            )
 
-        # CPU: animate then switch to interactive Plotly when done
-        _cpu_remaining = max(1, _cpu_total - cpu_display_idx)
-        _cpu_step = max(_DAYS_PER_FRAME, _cpu_remaining // 5) if cpu_done else _DAYS_PER_FRAME
-        if cpu_done and _cpu_anim_done and not cpu_plotly_rendered:
+        if cpu_done and not cpu_plotly_rendered and cpu_plot_data["cum_dates"]:
             cpu_plot_container.plotly_chart(
                 _build_rebalancing_plotly(
                     cpu_plot_data["cum_dates"],
@@ -2492,26 +2466,8 @@ def run_progressive_rebalancing(
                 key=_next_key("cpu_plot"),
             )
             cpu_plotly_rendered = True
-        elif not _cpu_anim_done and (
-            cpu_display_idx < _cpu_total or (cpu_display_idx == 0 and _cpu_bh_total > 0)
-        ):
-            cpu_display_idx = min(cpu_display_idx + _cpu_step, _cpu_total)
-            _bh_idx = min(cpu_display_idx, _cpu_bh_total)
-            cpu_plot_container.image(
-                _render_rebalancing_frame(
-                    cpu_plot_data["cum_dates"][:cpu_display_idx],
-                    cpu_plot_data["cum_values"][:cpu_display_idx],
-                    cpu_plot_data["bh_dates"][:_bh_idx],
-                    cpu_plot_data["bh_values"][:_bh_idx],
-                    cpu_plot_data["rebal_dates"],
-                    "— CPU",
-                    yaxis_range=_shared_yrange,
-                ),
-                width="stretch",
-            )
 
-        # Exit when both are done and rendered as Plotly
-        if gpu_plotly_rendered and cpu_plotly_rendered:
+        if gpu_done and cpu_done and gpu_plotly_rendered and cpu_plotly_rendered:
             break
 
         time.sleep(PerformanceParams.MAIN_LOOP_DELAY)
