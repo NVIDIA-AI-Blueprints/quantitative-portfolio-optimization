@@ -432,8 +432,13 @@ def _build_rebalancing_plotly(
             xanchor="left",
             yanchor="top",
         ),
+        autosize=True,
         margin=dict(l=50, r=15, t=30, b=25),
         hovermode="x unified",
+    )
+    fig.update_layout(
+        xaxis=dict(automargin=True),
+        yaxis=dict(automargin=True),
     )
     return fig
 
@@ -2435,6 +2440,8 @@ def run_progressive_rebalancing(
         else:
             _shared_yrange = None
 
+        _plotly_config = {"responsive": True}
+
         if gpu_done and not gpu_plotly_rendered and gpu_plot_data["cum_dates"]:
             gpu_plot_container.plotly_chart(
                 _build_rebalancing_plotly(
@@ -2447,6 +2454,7 @@ def run_progressive_rebalancing(
                     yaxis_range=_shared_yrange,
                 ),
                 width="stretch",
+                config=_plotly_config,
                 key=_next_key("gpu_plot"),
             )
             gpu_plotly_rendered = True
@@ -2463,6 +2471,7 @@ def run_progressive_rebalancing(
                     yaxis_range=_shared_yrange,
                 ),
                 width="stretch",
+                config=_plotly_config,
                 key=_next_key("cpu_plot"),
             )
             cpu_plotly_rendered = True
