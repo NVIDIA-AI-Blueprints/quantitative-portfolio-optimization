@@ -514,7 +514,7 @@ def _render_rebalancing_frame(
             ax.plot(
                 pd.to_datetime(bh_dates),
                 bh_values,
-                linewidth=1.8,
+                linewidth=2.5,
                 color="#ef9100",
                 alpha=0.85,
                 label="Buy & Hold",
@@ -524,7 +524,7 @@ def _render_rebalancing_frame(
             ax.plot(
                 pd.to_datetime(cum_dates),
                 cum_values,
-                linewidth=2.2,
+                linewidth=3.0,
                 color="#76b900",
                 alpha=0.95,
                 label="Dynamic Rebalancing",
@@ -540,28 +540,28 @@ def _render_rebalancing_frame(
                         float(cum_s[dt]),
                         "D",
                         color="#f9c500",
-                        markersize=5,
+                        markersize=7,
                         markeredgecolor="white",
-                        markeredgewidth=0.8,
+                        markeredgewidth=1.2,
                         zorder=5,
                     )
 
         ax.set_title(
             f"Backtest Rebalancing Strategies {title_suffix}".strip(),
-            fontsize=10,
+            fontsize=14,
             fontweight="bold",
             color="#fafafa",
-            pad=4,
+            pad=6,
         )
-        ax.set_ylabel("Cumulative Value", fontsize=8, color="#aaa")
-        ax.tick_params(colors="#666", labelsize=7)
-        ax.grid(True, alpha=0.15, color="#333")
+        ax.set_ylabel("Cumulative Value", fontsize=11, color="#aaa")
+        ax.tick_params(colors="#888", labelsize=9)
+        ax.grid(True, alpha=0.2, color="#333")
         for spine in ax.spines.values():
             spine.set_visible(False)
         if yaxis_range is not None:
             ax.set_ylim(yaxis_range)
         if cum_dates or bh_dates:
-            ax.legend(fontsize=7, loc="upper left", frameon=False, labelcolor="#ccc")
+            ax.legend(fontsize=10, loc="upper left", frameon=False, labelcolor="#ccc")
         fig.tight_layout(pad=0.8)
 
         buf = io.BytesIO()
@@ -2143,8 +2143,6 @@ def run_progressive_rebalancing(
     }
     gpu_display_idx = 0
     cpu_display_idx = 0
-    gpu_plotly_rendered = False
-    cpu_plotly_rendered = False
 
     # Show initial waiting bars immediately
     with gpu_solving_placeholder.container():
@@ -2440,43 +2438,7 @@ def run_progressive_rebalancing(
         else:
             _shared_yrange = None
 
-        _plotly_config = {"responsive": True}
-
-        if gpu_done and not gpu_plotly_rendered and gpu_plot_data["cum_dates"]:
-            gpu_plot_container.plotly_chart(
-                _build_rebalancing_plotly(
-                    gpu_plot_data["cum_dates"],
-                    gpu_plot_data["cum_values"],
-                    gpu_plot_data["bh_dates"],
-                    gpu_plot_data["bh_values"],
-                    gpu_plot_data["rebal_dates"],
-                    "— GPU",
-                    yaxis_range=_shared_yrange,
-                ),
-                width="stretch",
-                config=_plotly_config,
-                key=_next_key("gpu_plot"),
-            )
-            gpu_plotly_rendered = True
-
-        if cpu_done and not cpu_plotly_rendered and cpu_plot_data["cum_dates"]:
-            cpu_plot_container.plotly_chart(
-                _build_rebalancing_plotly(
-                    cpu_plot_data["cum_dates"],
-                    cpu_plot_data["cum_values"],
-                    cpu_plot_data["bh_dates"],
-                    cpu_plot_data["bh_values"],
-                    cpu_plot_data["rebal_dates"],
-                    "— CPU",
-                    yaxis_range=_shared_yrange,
-                ),
-                width="stretch",
-                config=_plotly_config,
-                key=_next_key("cpu_plot"),
-            )
-            cpu_plotly_rendered = True
-
-        if gpu_done and cpu_done and gpu_plotly_rendered and cpu_plotly_rendered:
+        if gpu_done and cpu_done:
             break
 
         time.sleep(PerformanceParams.MAIN_LOOP_DELAY)
