@@ -939,11 +939,9 @@ def main():
         )
 
     with tab_agent:
-        agent_video = script_dir / "diagrams" / "cuFOLIO_Agent_GTC_demo.mp4"
-        if agent_video.exists():
-            col_v1, col_v2, col_v3 = st.columns([1, 3, 1])
-            with col_v2:
-                st.video(str(agent_video))
+        col_v1, col_v2, col_v3 = st.columns([1, 4, 1])
+        with col_v2:
+            st.video("https://youtu.be/Fs8oDVP8kQg")
 
     with tab_bench:
         st.markdown("#### Benchmark Results")
