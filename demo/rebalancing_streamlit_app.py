@@ -2885,9 +2885,15 @@ def main():
             "through the backtest in real time."
         )
         if gif_path.exists():
-            col_g1, col_g2, col_g3 = st.columns([1, 3, 1])
-            with col_g2:
-                st.image(str(gif_path), width="stretch")
+            import base64
+            _gif_bytes = gif_path.read_bytes()
+            _gif_b64 = base64.b64encode(_gif_bytes).decode()
+            st.markdown(
+                f'<div style="display:flex;justify-content:center;">'
+                f'<img src="data:image/gif;base64,{_gif_b64}" style="width:60%;">'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
             st.caption(
                 "Using the cuOpt GPU solver (left), you can test rebalancing "
                 "strategies much faster than using a CPU solver (right) — shown at 4x speed."
