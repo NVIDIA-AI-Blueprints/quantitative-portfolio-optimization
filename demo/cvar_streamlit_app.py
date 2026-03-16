@@ -916,8 +916,8 @@ def main():
     arch_path = script_dir / "diagrams" / "arch_diagram.svg"
     bench_img = script_dir / "diagrams" / "dark_b200_cuopt_vs_opensource (1).png"
 
-    tab_overview, tab_data, tab_demo, tab_arch, tab_bench, tab_refs = st.tabs(
-        ["📊 Overview", "📁 Dataset", "🚀 Live Demo", "🏗️ Architecture", "📈 Benchmarks", "📚 References"]
+    tab_overview, tab_data, tab_demo, tab_arch, tab_agent, tab_bench, tab_refs = st.tabs(
+        ["📊 Overview", "📁 Dataset", "🚀 Live Demo", "🏗️ Architecture", "🤖 Agent", "📈 Benchmarks", "📚 References"]
     )
 
     with tab_overview:
@@ -937,6 +937,13 @@ def main():
             "an optimal allocation. The result is then **backtested** against "
             "historical data to validate performance."
         )
+
+    with tab_agent:
+        agent_video = script_dir / "diagrams" / "cuFOLIO_Agent_GTC_demo.mp4"
+        if agent_video.exists():
+            col_v1, col_v2, col_v3 = st.columns([1, 3, 1])
+            with col_v2:
+                st.video(str(agent_video))
 
     with tab_bench:
         st.markdown("#### Benchmark Results")

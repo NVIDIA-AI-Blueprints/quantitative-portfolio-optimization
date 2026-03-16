@@ -2840,12 +2840,13 @@ def main():
 
     _switch_to_tab = st.session_state.pop("switch_to_dataset_tab", False)
 
-    tab_overview, tab_data, tab_demo, tab_arch, tab_bench, tab_refs = st.tabs(
+    tab_overview, tab_data, tab_demo, tab_arch, tab_agent, tab_bench, tab_refs = st.tabs(
         [
             "📊 Overview",
             "📁 Dataset",
             "🚀 Live Demo",
             "🏗️ Architecture",
+            "🤖 Agent",
             "📈 Benchmarks",
             "📚 References",
         ]
@@ -3086,6 +3087,13 @@ def main():
             "**backtested** period-by-period, triggering re-optimization "
             "when conditions are breached."
         )
+
+    with tab_agent:
+        agent_video = script_dir / "diagrams" / "cuFOLIO_Agent_GTC_demo.mp4"
+        if agent_video.exists():
+            col_v1, col_v2, col_v3 = st.columns([1, 3, 1])
+            with col_v2:
+                st.video(str(agent_video))
 
     with tab_bench:
         st.markdown("#### Benchmark Results")
