@@ -1,10 +1,9 @@
 import numpy as np
 import pandas as pd
 import pytest
-
-from src.cvar_data import CvarData
-from src.cvar_parameters import CvarParameters
-from src.portfolio import Portfolio
+from cufolio.cvar_data import CvarData
+from cufolio.cvar_parameters import CvarParameters
+from cufolio.portfolio import Portfolio
 
 # ---------------------------------------------------------------------------
 # Fixtures: small synthetic data shared across tests
@@ -25,7 +24,7 @@ def price_data():
 
 @pytest.fixture()
 def returns_dict(price_data):
-    from src.utils import calculate_returns
+    from cufolio.utils import calculate_returns
 
     settings = {"return_type": "LOG", "freq": 1}
     return calculate_returns(
@@ -35,7 +34,7 @@ def returns_dict(price_data):
 
 @pytest.fixture()
 def cvar_data(returns_dict):
-    from src.cvar_utils import generate_cvar_data
+    from cufolio.cvar_utils import generate_cvar_data
 
     np.random.seed(0)
     settings = {"num_scen": 200, "fit_type": "gaussian"}
@@ -63,14 +62,14 @@ def cvar_params():
 
 class TestReturns:
     def test_log_returns_shape(self, price_data):
-        from src.utils import calculate_log_returns
+        from cufolio.utils import calculate_log_returns
 
         ret = calculate_log_returns(price_data, freq=1)
         assert ret.shape == (59, 3)
         assert list(ret.columns) == TICKERS
 
     def test_log_returns_values(self, price_data):
-        from src.utils import calculate_log_returns
+        from cufolio.utils import calculate_log_returns
 
         ret = calculate_log_returns(price_data, freq=1)
         expected_first = np.log(price_data.iloc[1]) - np.log(price_data.iloc[0])
@@ -79,13 +78,13 @@ class TestReturns:
         )
 
     def test_abs_returns_shape(self, price_data):
-        from src.utils import compute_abs_returns
+        from cufolio.utils import compute_abs_returns
 
         ret = compute_abs_returns(price_data, freq=1)
         assert ret.shape == (59, 3)
 
     def test_abs_returns_values(self, price_data):
-        from src.utils import compute_abs_returns
+        from cufolio.utils import compute_abs_returns
 
         ret = compute_abs_returns(price_data, freq=1)
         expected_first = price_data.iloc[1] - price_data.iloc[0]
@@ -219,7 +218,7 @@ class TestPortfolio:
 
 class TestComputeCVaR:
     def test_known_cvar(self):
-        from src.cvar_utils import compute_CVaR
+        from cufolio.cvar_utils import compute_CVaR
 
         np.random.seed(99)
         n_scen = 10000
@@ -235,7 +234,7 @@ class TestComputeCVaR:
         assert cvar_99 > cvar_95, "99% CVaR should exceed 95% CVaR"
 
     def test_zero_weight_zero_cvar(self):
-        from src.cvar_utils import compute_CVaR
+        from cufolio.cvar_utils import compute_CVaR
 
         R = np.array([[0.01, -0.02, 0.03], [0.02, -0.01, 0.01]])
         p = np.ones(3) / 3
@@ -253,7 +252,7 @@ class TestComputeCVaR:
 
 class TestNormalizeWeights:
     def test_sums_to_one(self):
-        from src.cvar_utils import normalize_portfolio_weights_to_one
+        from cufolio.cvar_utils import normalize_portfolio_weights_to_one
 
         weights_dict = {"AAPL": 0.3, "GOOGL": 0.4, "MSFT": 0.2}
         cash = 0.2
@@ -262,14 +261,14 @@ class TestNormalizeWeights:
         assert total == pytest.approx(1.0, abs=1e-10)
 
     def test_preserves_ratios(self):
-        from src.cvar_utils import normalize_portfolio_weights_to_one
+        from cufolio.cvar_utils import normalize_portfolio_weights_to_one
 
         weights_dict = {"A": 2.0, "B": 1.0}
         nw, _ = normalize_portfolio_weights_to_one(weights_dict, 0.0)
         assert nw["A"] / nw["B"] == pytest.approx(2.0, abs=1e-10)
 
     def test_already_normalized(self):
-        from src.cvar_utils import normalize_portfolio_weights_to_one
+        from cufolio.cvar_utils import normalize_portfolio_weights_to_one
 
         weights_dict = {"A": 0.6, "B": 0.3}
         nw, nc = normalize_portfolio_weights_to_one(weights_dict, 0.1)
@@ -284,7 +283,7 @@ class TestNormalizeWeights:
 
 class TestGenerateCvarData:
     def test_gaussian_fit(self, returns_dict):
-        from src.cvar_utils import generate_cvar_data
+        from cufolio.cvar_utils import generate_cvar_data
 
         np.random.seed(7)
         rd = generate_cvar_data(returns_dict, {"num_scen": 100, "fit_type": "gaussian"})
@@ -293,7 +292,7 @@ class TestGenerateCvarData:
         np.testing.assert_allclose(cd.p.sum(), 1.0, atol=1e-12)
 
     def test_no_fit(self, returns_dict):
-        from src.cvar_utils import generate_cvar_data
+        from cufolio.cvar_utils import generate_cvar_data
 
         rd = generate_cvar_data(returns_dict, {"num_scen": None, "fit_type": "no_fit"})
         cd = rd["cvar_data"]
@@ -301,7 +300,7 @@ class TestGenerateCvarData:
         assert cd.R.shape == (3, n_obs)
 
     def test_invalid_fit_type(self, returns_dict):
-        from src.cvar_utils import generate_cvar_data
+        from cufolio.cvar_utils import generate_cvar_data
 
         with pytest.raises(ValueError, match="Unsupported fit type"):
             generate_cvar_data(returns_dict, {"num_scen": 50, "fit_type": "magic"})
@@ -315,8 +314,7 @@ class TestGenerateCvarData:
 class TestCVaROptimization:
     def test_basic_optimization_feasible(self, returns_dict, cvar_data, cvar_params):
         import cvxpy as cp
-
-        from src.cvar_optimizer import CVaR
+        from cufolio.cvar_optimizer import CVaR
 
         returns_dict["cvar_data"] = cvar_data
         optimizer = CVaR(returns_dict=returns_dict, cvar_params=cvar_params)
@@ -339,8 +337,7 @@ class TestCVaROptimization:
         self, returns_dict, cvar_data, cvar_params
     ):
         import cvxpy as cp
-
-        from src.cvar_optimizer import CVaR
+        from cufolio.cvar_optimizer import CVaR
 
         returns_dict["cvar_data"] = cvar_data
         optimizer = CVaR(returns_dict=returns_dict, cvar_params=cvar_params)
@@ -353,9 +350,8 @@ class TestCVaROptimization:
 
     def test_cvar_consistent_with_compute(self, returns_dict, cvar_data, cvar_params):
         import cvxpy as cp
-
-        from src.cvar_optimizer import CVaR
-        from src.cvar_utils import compute_CVaR
+        from cufolio.cvar_optimizer import CVaR
+        from cufolio.cvar_utils import compute_CVaR
 
         returns_dict["cvar_data"] = cvar_data
         optimizer = CVaR(returns_dict=returns_dict, cvar_params=cvar_params)
@@ -372,8 +368,7 @@ class TestCVaROptimization:
 
     def test_cardinality_constraint(self, returns_dict, cvar_data):
         import cvxpy as cp
-
-        from src.cvar_optimizer import CVaR
+        from cufolio.cvar_optimizer import CVaR
 
         params = CvarParameters(
             w_min=0.0,
