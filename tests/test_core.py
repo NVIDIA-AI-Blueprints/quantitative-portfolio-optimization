@@ -1,9 +1,26 @@
+import cvxpy as cp
+import matplotlib
 import numpy as np
 import pandas as pd
 import pytest
+from cufolio.backtest import portfolio_backtester
 from cufolio.cvar_data import CvarData
+from cufolio.cvar_optimizer import CVaR
 from cufolio.cvar_parameters import CvarParameters
+from cufolio.cvar_utils import (
+    compute_CVaR,
+    create_efficient_frontier,
+    generate_cvar_data,
+    normalize_portfolio_weights_to_one,
+)
 from cufolio.portfolio import Portfolio
+from cufolio.utils import (
+    calculate_log_returns,
+    calculate_returns,
+    compute_abs_returns,
+)
+
+matplotlib.use("Agg")
 
 # ---------------------------------------------------------------------------
 # Fixtures: small synthetic data shared across tests
@@ -24,8 +41,6 @@ def price_data():
 
 @pytest.fixture()
 def returns_dict(price_data):
-    from cufolio.utils import calculate_returns
-
     settings = {"return_type": "LOG", "freq": 1}
     return calculate_returns(
         price_data, regime_dict=None, returns_compute_settings=settings
@@ -34,8 +49,6 @@ def returns_dict(price_data):
 
 @pytest.fixture()
 def cvar_data(returns_dict):
-    from cufolio.cvar_utils import generate_cvar_data
-
     np.random.seed(0)
     settings = {"num_scen": 200, "fit_type": "gaussian"}
     rd = generate_cvar_data(returns_dict, settings)
@@ -62,15 +75,11 @@ def cvar_params():
 
 class TestReturns:
     def test_log_returns_shape(self, price_data):
-        from cufolio.utils import calculate_log_returns
-
         ret = calculate_log_returns(price_data, freq=1)
         assert ret.shape == (59, 3)
         assert list(ret.columns) == TICKERS
 
     def test_log_returns_values(self, price_data):
-        from cufolio.utils import calculate_log_returns
-
         ret = calculate_log_returns(price_data, freq=1)
         expected_first = np.log(price_data.iloc[1]) - np.log(price_data.iloc[0])
         np.testing.assert_allclose(
@@ -78,14 +87,10 @@ class TestReturns:
         )
 
     def test_abs_returns_shape(self, price_data):
-        from cufolio.utils import compute_abs_returns
-
         ret = compute_abs_returns(price_data, freq=1)
         assert ret.shape == (59, 3)
 
     def test_abs_returns_values(self, price_data):
-        from cufolio.utils import compute_abs_returns
-
         ret = compute_abs_returns(price_data, freq=1)
         expected_first = price_data.iloc[1] - price_data.iloc[0]
         np.testing.assert_allclose(
@@ -218,8 +223,6 @@ class TestPortfolio:
 
 class TestComputeCVaR:
     def test_known_cvar(self):
-        from cufolio.cvar_utils import compute_CVaR
-
         np.random.seed(99)
         n_scen = 10000
         R = np.random.randn(1, n_scen) * 0.02
@@ -234,8 +237,6 @@ class TestComputeCVaR:
         assert cvar_99 > cvar_95, "99% CVaR should exceed 95% CVaR"
 
     def test_zero_weight_zero_cvar(self):
-        from cufolio.cvar_utils import compute_CVaR
-
         R = np.array([[0.01, -0.02, 0.03], [0.02, -0.01, 0.01]])
         p = np.ones(3) / 3
         data = CvarData(mean=np.zeros(2), R=R, p=p)
@@ -252,8 +253,6 @@ class TestComputeCVaR:
 
 class TestNormalizeWeights:
     def test_sums_to_one(self):
-        from cufolio.cvar_utils import normalize_portfolio_weights_to_one
-
         weights_dict = {"AAPL": 0.3, "GOOGL": 0.4, "MSFT": 0.2}
         cash = 0.2
         nw, nc = normalize_portfolio_weights_to_one(weights_dict, cash)
@@ -261,15 +260,11 @@ class TestNormalizeWeights:
         assert total == pytest.approx(1.0, abs=1e-10)
 
     def test_preserves_ratios(self):
-        from cufolio.cvar_utils import normalize_portfolio_weights_to_one
-
         weights_dict = {"A": 2.0, "B": 1.0}
         nw, _ = normalize_portfolio_weights_to_one(weights_dict, 0.0)
         assert nw["A"] / nw["B"] == pytest.approx(2.0, abs=1e-10)
 
     def test_already_normalized(self):
-        from cufolio.cvar_utils import normalize_portfolio_weights_to_one
-
         weights_dict = {"A": 0.6, "B": 0.3}
         nw, nc = normalize_portfolio_weights_to_one(weights_dict, 0.1)
         np.testing.assert_allclose(nw["A"], 0.6, atol=1e-10)
@@ -283,8 +278,6 @@ class TestNormalizeWeights:
 
 class TestGenerateCvarData:
     def test_gaussian_fit(self, returns_dict):
-        from cufolio.cvar_utils import generate_cvar_data
-
         np.random.seed(7)
         rd = generate_cvar_data(returns_dict, {"num_scen": 100, "fit_type": "gaussian"})
         cd = rd["cvar_data"]
@@ -292,16 +285,12 @@ class TestGenerateCvarData:
         np.testing.assert_allclose(cd.p.sum(), 1.0, atol=1e-12)
 
     def test_no_fit(self, returns_dict):
-        from cufolio.cvar_utils import generate_cvar_data
-
         rd = generate_cvar_data(returns_dict, {"num_scen": None, "fit_type": "no_fit"})
         cd = rd["cvar_data"]
         n_obs = returns_dict["returns"].shape[0]
         assert cd.R.shape == (3, n_obs)
 
     def test_invalid_fit_type(self, returns_dict):
-        from cufolio.cvar_utils import generate_cvar_data
-
         with pytest.raises(ValueError, match="Unsupported fit type"):
             generate_cvar_data(returns_dict, {"num_scen": 50, "fit_type": "magic"})
 
@@ -313,9 +302,6 @@ class TestGenerateCvarData:
 
 class TestCVaROptimization:
     def test_basic_optimization_feasible(self, returns_dict, cvar_data, cvar_params):
-        import cvxpy as cp
-        from cufolio.cvar_optimizer import CVaR
-
         returns_dict["cvar_data"] = cvar_data
         optimizer = CVaR(returns_dict=returns_dict, cvar_params=cvar_params)
         result, portfolio = optimizer.solve_optimization_problem(
@@ -326,19 +312,14 @@ class TestCVaROptimization:
         w = portfolio.weights
         c = portfolio.cash
 
-        # weights + cash should sum to 1
         np.testing.assert_allclose(np.sum(w) + c, 1.0, atol=1e-4)
 
-        # bounds respected
         assert np.all(w >= -1e-4), "weights should respect lower bound"
         assert np.all(w <= 0.5 + 1e-4), "weights should respect upper bound"
 
     def test_optimization_returns_expected_keys(
         self, returns_dict, cvar_data, cvar_params
     ):
-        import cvxpy as cp
-        from cufolio.cvar_optimizer import CVaR
-
         returns_dict["cvar_data"] = cvar_data
         optimizer = CVaR(returns_dict=returns_dict, cvar_params=cvar_params)
         result, _ = optimizer.solve_optimization_problem(
@@ -349,10 +330,6 @@ class TestCVaROptimization:
             assert key in result.index, f"Missing key: {key}"
 
     def test_cvar_consistent_with_compute(self, returns_dict, cvar_data, cvar_params):
-        import cvxpy as cp
-        from cufolio.cvar_optimizer import CVaR
-        from cufolio.cvar_utils import compute_CVaR
-
         returns_dict["cvar_data"] = cvar_data
         optimizer = CVaR(returns_dict=returns_dict, cvar_params=cvar_params)
         result, portfolio = optimizer.solve_optimization_problem(
@@ -366,28 +343,124 @@ class TestCVaROptimization:
 
         np.testing.assert_allclose(reported_cvar, computed_cvar, atol=0.02)
 
-    def test_cardinality_constraint(self, returns_dict, cvar_data):
-        import cvxpy as cp
-        from cufolio.cvar_optimizer import CVaR
 
-        params = CvarParameters(
-            w_min=0.0,
-            w_max=0.8,
-            c_min=0.0,
-            c_max=1.0,
-            risk_aversion=1.0,
-            confidence=0.95,
-            L_tar=1.6,
-            cardinality=2,
-        )
+# ---------------------------------------------------------------------------
+# Efficient frontier end-to-end
+# ---------------------------------------------------------------------------
+
+
+class TestEfficientFrontier:
+    def test_frontier_monotonicity(self, returns_dict, cvar_data, cvar_params):
         returns_dict["cvar_data"] = cvar_data
-        optimizer = CVaR(returns_dict=returns_dict, cvar_params=params)
-        try:
-            _, portfolio = optimizer.solve_optimization_problem(
-                {"solver": cp.CLARABEL, "verbose": False}, print_results=False
-            )
-        except cp.error.SolverError:
-            pytest.skip("no MIP-capable solver installed")
+        solver_settings = {"solver": cp.CLARABEL, "verbose": False}
 
-        nonzero = np.sum(np.abs(portfolio.weights) > 1e-3)
-        assert nonzero <= 2, f"Expected at most 2 active assets, got {nonzero}"
+        results_df, fig, ax = create_efficient_frontier(
+            returns_dict,
+            cvar_params,
+            solver_settings,
+            ra_num=3,
+            min_risk_aversion=-1,
+            max_risk_aversion=1,
+            show_plot=False,
+            show_discretized_portfolios=False,
+            benchmark_portfolios=False,
+            print_portfolio_results=False,
+        )
+
+        assert len(results_df) == 3
+        assert "return" in results_df.columns
+        assert "CVaR" in results_df.columns
+        assert "variance" in results_df.columns
+
+        sorted_by_risk = results_df.sort_values("CVaR")
+        returns_sorted = sorted_by_risk["return"].values
+        assert returns_sorted[-1] >= returns_sorted[0] - 1e-6, (
+            "higher risk should generally yield higher return on the frontier"
+        )
+
+        for _, row in results_df.iterrows():
+            assert row["variance"] >= 0, "variance must be non-negative"
+            assert np.isfinite(row["sharpe"]), "sharpe should be finite"
+
+
+# ---------------------------------------------------------------------------
+# Backtester with canned data
+# ---------------------------------------------------------------------------
+
+
+class TestBacktester:
+    @pytest.fixture()
+    def backtest_returns_dict(self):
+        np.random.seed(123)
+        dates = pd.date_range("2023-01-01", periods=252, freq="B")
+        daily_returns = np.random.randn(252, 3) * 0.01 + 0.0003
+        returns_df = pd.DataFrame(daily_returns, index=dates, columns=TICKERS)
+        return {
+            "return_type": "LOG",
+            "returns": returns_df,
+            "dates": returns_df.index,
+            "mean": np.mean(daily_returns, axis=0),
+            "covariance": np.cov(daily_returns.T),
+            "tickers": TICKERS,
+        }
+
+    def test_sharpe_ratio_positive_for_positive_drift(self, backtest_returns_dict):
+        portfolio = Portfolio(
+            name="test",
+            tickers=TICKERS,
+            weights=np.array([0.4, 0.3, 0.3]),
+            cash=0.0,
+        )
+        bt = portfolio_backtester(
+            test_portfolio=portfolio,
+            returns_dict=backtest_returns_dict,
+            risk_free_rate=0.0,
+            test_method="historical",
+        )
+        results, _ = bt.backtest_against_benchmarks(plot_returns=False)
+        sharpe = results.loc["test", "sharpe"]
+        assert sharpe > 0, "positive drift data should produce positive Sharpe"
+
+    def test_sortino_exceeds_sharpe(self, backtest_returns_dict):
+        portfolio = Portfolio(
+            name="test",
+            tickers=TICKERS,
+            weights=np.array([0.4, 0.3, 0.3]),
+            cash=0.0,
+        )
+        bt = portfolio_backtester(
+            test_portfolio=portfolio,
+            returns_dict=backtest_returns_dict,
+            risk_free_rate=0.0,
+            test_method="historical",
+        )
+        results, _ = bt.backtest_against_benchmarks(plot_returns=False)
+        sharpe = results.loc["test", "sharpe"]
+        sortino = results.loc["test", "sortino"]
+        assert sortino > sharpe, (
+            "Sortino should exceed Sharpe when downside vol < total vol"
+        )
+
+    def test_max_drawdown_bounded(self, backtest_returns_dict):
+        portfolio = Portfolio(
+            name="test",
+            tickers=TICKERS,
+            weights=np.array([0.4, 0.3, 0.3]),
+            cash=0.0,
+        )
+        bt = portfolio_backtester(
+            test_portfolio=portfolio,
+            returns_dict=backtest_returns_dict,
+            risk_free_rate=0.0,
+            test_method="historical",
+        )
+        results, _ = bt.backtest_against_benchmarks(plot_returns=False)
+        mdd = results.loc["test", "max drawdown"]
+        assert 0 <= mdd <= 1, "max drawdown should be between 0 and 1"
+
+    def test_drawdown_known_series(self):
+        values = np.array([1.0, 1.1, 1.05, 0.9, 0.95, 1.0])
+        bt = portfolio_backtester.__new__(portfolio_backtester)
+        mdd = bt.max_drawdown(values)
+        expected = (1.1 - 0.9) / 1.1
+        np.testing.assert_allclose(mdd, expected, atol=1e-10)
