@@ -34,6 +34,9 @@ jobs:
       - name: Lint
         run: uv run ruff check src/ notebooks/
 
+      - name: Run tests
+        run: uv run pytest tests/ -v
+
   run-notebooks:
     needs: [lint]
     runs-on: arc-runners-org-nvidia-ai-bp-1-gpu

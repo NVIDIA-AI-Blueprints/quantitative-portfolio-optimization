@@ -33,7 +33,7 @@ jobs:
       - name: Lint
         run: uv run ruff check src/ notebooks/
 
-  install-check:
+  install-and-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -48,19 +48,22 @@ jobs:
           python-version: "3.12"
 
       - name: Install package
-        run: uv sync
+        run: uv sync --extra dev
 
       - name: Verify import
         run: uv run python -c "import cufolio"
 
+      - name: Run tests
+        run: uv run pytest tests/ -v
+
   pr-builder:
     if: always()
-    needs: [lint, install-check]
+    needs: [lint, install-and-test]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
         run: |
-          if [[ "${{ needs.lint.result }}" != "success" || "${{ needs.install-check.result }}" != "success" ]]; then
+          if [[ "${{ needs.lint.result }}" != "success" || "${{ needs.install-and-test.result }}" != "success" ]]; then
             echo "One or more required jobs failed."
             exit 1
           fi
