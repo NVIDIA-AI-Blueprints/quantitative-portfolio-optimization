@@ -265,9 +265,9 @@ class Portfolio:
         float
             Portfolio expected return
         """
-        assert (
-            mean.shape[0] == self._n_assets
-        ), f"Incorrect mean vector size! Expecting: {self._n_assets}."
+        assert mean.shape[0] == self._n_assets, (
+            f"Incorrect mean vector size! Expecting: {self._n_assets}."
+        )
 
         return mean @ self.weights
 

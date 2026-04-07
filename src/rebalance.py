@@ -127,9 +127,9 @@ class rebalance_portfolio:
             self.dataset_directory, index_col=0, parse_dates=True
         )
         price_data_start = self.trading_start - pd.Timedelta(days=self.look_back_window)
-        assert (
-            price_data_start >= self.price_data.index[0]
-        ), "Invalid start date - choose a later date!"
+        assert price_data_start >= self.price_data.index[0], (
+            "Invalid start date - choose a later date!"
+        )
 
     def re_optimize(
         self,
@@ -876,9 +876,9 @@ class rebalance_portfolio:
         AssertionError
             If ticker not found in price data.
         """
-        assert (
-            ticker in self.price_data.columns
-        ), "The selected ticker is not in the asset universe!"
+        assert ticker in self.price_data.columns, (
+            "The selected ticker is not in the asset universe!"
+        )
 
         ticker_idx = list(self.price_data.columns).index(ticker)
         ticker_weights_history = [

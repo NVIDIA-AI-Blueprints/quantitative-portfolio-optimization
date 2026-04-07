@@ -28,14 +28,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
-      - name: Check formatting with black
-        run: uv run black --check src/ notebooks/
+      - name: Check formatting
+        run: uv run ruff format --check src/ notebooks/
 
-      - name: Check import order with isort
-        run: uv run isort --check-only src/ notebooks/
-
-      - name: Lint with flake8
-        run: uv run flake8 src/
+      - name: Lint
+        run: uv run ruff check src/ notebooks/
 
   run-notebooks:
     needs: [lint]

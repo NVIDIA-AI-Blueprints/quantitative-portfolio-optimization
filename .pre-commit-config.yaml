@@ -1,17 +1,12 @@
 repos:
-  - repo: https://github.com/psf/black
-    rev: 25.9.0
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
     hooks:
-      - id: black-jupyter
-        language_version: python3
-
-  - repo: https://github.com/pycqa/isort
-    rev: 6.0.1
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.3
     hooks:
-      - id: isort
-
-  - repo: https://github.com/pycqa/flake8
-    rev: 7.2.0
-    hooks:
-      - id: flake8
-        args: [--max-line-length=88, --extend-ignore=E203]
+      - id: ruff-check
+        args: [--fix, --config, pyproject.toml]
+      - id: ruff-format
