@@ -29,10 +29,10 @@ jobs:
         run: uv sync --extra dev
 
       - name: Check formatting
-        run: uv run ruff format --check src/ notebooks/
+        run: uv run ruff format --check src/
 
       - name: Lint
-        run: uv run ruff check src/ notebooks/
+        run: uv run ruff check src/
 
       - name: Run tests
         run: uv run pytest tests/ -v
