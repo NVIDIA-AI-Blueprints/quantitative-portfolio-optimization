@@ -34,7 +34,7 @@ The end-to-end pipeline connects market data ingestion to optimal strategy backt
 * **Iterative Workflow:** Supports dynamic, fast, and data-driven optimization cycles.
 
 <p align="center">
-    <img src="./docs/arch_diagram.svg" alt="architecture diagram for PO" width="750"/>
+    <img src="./docs/arch_diagram.png" alt="architecture diagram for PO" width="750"/>
 </p>
 
 ---
