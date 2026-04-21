@@ -99,9 +99,9 @@ def generate_samples_kde(
 
         start_time = time.time()
         with cuml.using_output_type("numpy"):
-            kde = cuml.neighbors.KernelDensity(
-                kernel=kernel, bandwidth=bandwidth
-            ).fit(returns_data)
+            kde = cuml.neighbors.KernelDensity(kernel=kernel, bandwidth=bandwidth).fit(
+                returns_data
+            )
             new_samples = kde.sample(num_scen)
 
         end_time = time.time()

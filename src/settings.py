@@ -265,4 +265,3 @@ class ApiSettings(BaseModel):
         default=None,
         description="Path to save CVXPY problem pickle (CVXPY only)",
     )
-

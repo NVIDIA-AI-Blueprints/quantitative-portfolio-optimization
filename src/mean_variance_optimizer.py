@@ -119,8 +119,11 @@ class MeanVariance(base_optimizer.BaseOptimizer):
             An existing portfolio to measure the turnover from.
         """
         super().__init__(
-            returns_dict, mean_variance_params, api_settings,
-            existing_portfolio, "variance"
+            returns_dict,
+            mean_variance_params,
+            api_settings,
+            existing_portfolio,
+            "variance",
         )
 
         self.mean = returns_dict["mean"]
@@ -220,7 +223,9 @@ class MeanVariance(base_optimizer.BaseOptimizer):
 
         # Set up common constraints
         if self.params.cardinality is not None:
-            raise NotImplementedError("MIQP (cardinality constraint) is not implemented yet.")
+            raise NotImplementedError(
+                "MIQP (cardinality constraint) is not implemented yet."
+            )
         else:
             constraints.extend(
                 [
@@ -249,8 +254,7 @@ class MeanVariance(base_optimizer.BaseOptimizer):
         if self.params.group_constraints is not None:
             for group_constraint in self.params.group_constraints:
                 tickers_index = [
-                    self.tickers.index(ticker)
-                    for ticker in group_constraint["tickers"]
+                    self.tickers.index(ticker) for ticker in group_constraint["tickers"]
                 ]
                 constraints.append(
                     cp.sum(self.w[tickers_index])
@@ -285,8 +289,8 @@ class MeanVariance(base_optimizer.BaseOptimizer):
         from cuopt.linear_programming.problem import (
             CONTINUOUS,
             MINIMIZE,
-            Problem,
             LinearExpression,
+            Problem,
             QuadraticExpression,
         )
 
@@ -405,8 +409,7 @@ class MeanVariance(base_optimizer.BaseOptimizer):
             t0 = time.time()
             for group_idx, group_constraint in enumerate(self.params.group_constraints):
                 tickers_index = [
-                    self.tickers.index(ticker)
-                    for ticker in group_constraint["tickers"]
+                    self.tickers.index(ticker) for ticker in group_constraint["tickers"]
                 ]
                 if len(tickers_index) > 0:
                     group_vars = [w_vars[i] for i in tickers_index]
@@ -433,9 +436,7 @@ class MeanVariance(base_optimizer.BaseOptimizer):
         t0 = time.time()
         total_vars = problem.NumVariables
         q_matrix = np.zeros((total_vars, total_vars))
-        q_matrix[:num_assets, :num_assets] = (
-            self.params.risk_aversion * self.covariance
-        )
+        q_matrix[:num_assets, :num_assets] = self.params.risk_aversion * self.covariance
         quad_expr = QuadraticExpression(q_matrix, problem.getVariables())
         timing["build_quad_matrix"] = time.time() - t0
 
@@ -455,7 +456,9 @@ class MeanVariance(base_optimizer.BaseOptimizer):
         print(f"{'=' * 50}")
         print("cuOpt MEAN-VARIANCE (QP) PROBLEM SETUP COMPLETED")
         print(f"{'=' * 50}")
-        print(f"Variables: {num_assets} weights + 1 cash + {2 * num_assets} leverage aux")
+        print(
+            f"Variables: {num_assets} weights + 1 cash + {2 * num_assets} leverage aux"
+        )
         print(f"Covariance matrix: {num_assets}x{num_assets}")
         print(f"Linear terms: {num_assets}")
         print("Problem Type: QP (Quadratic Programming)")
@@ -559,7 +562,9 @@ class MeanVariance(base_optimizer.BaseOptimizer):
 
         print("\nPERFORMANCE METRICS")
         print(f"{'-' * 30}")
-        print(f"Expected Return:     {expected_return:.6f} ({expected_return * 100:.4f}%)")
+        print(
+            f"Expected Return:     {expected_return:.6f} ({expected_return * 100:.4f}%)"
+        )
         print(f"Variance:            {variance_value:.6f}")
         print(f"Std Deviation:       {np.sqrt(variance_value):.6f}")
         print(f"Objective Value:     {objective_value:.6f}")
@@ -586,4 +591,3 @@ class MeanVariance(base_optimizer.BaseOptimizer):
     def _get_cone_data_filename(self):
         regime_name = getattr(self, "regime_name", "unknown")
         return f"mean_variance_{regime_name}.pkl"
-

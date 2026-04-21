@@ -405,9 +405,7 @@ class BaseOptimizer:
         )
 
         if print_results:
-            self._print_results(
-                result_row, portfolio, time_results, min_percentage=1
-            )
+            self._print_results(result_row, portfolio, time_results, min_percentage=1)
 
         return result_row, portfolio
 

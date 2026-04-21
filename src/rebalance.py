@@ -363,10 +363,12 @@ class rebalance_portfolio:
                 current_portfolio, tail_returns, benchmark_portfolios=None
             )
             tail_result = tail_bt.backtest_single_portfolio(current_portfolio)
-            cumulative_portfolio_value_array = np.concatenate((
-                cumulative_portfolio_value_array,
-                tail_result["cumulative returns"].values[0] * portfolio_value,
-            ))
+            cumulative_portfolio_value_array = np.concatenate(
+                (
+                    cumulative_portfolio_value_array,
+                    tail_result["cumulative returns"].values[0] * portfolio_value,
+                )
+            )
             cumulative_portfolio_value_dates.extend(tail_bt._dates)
 
         # Convert to pandas Series with dates as index, ensuring proper datetime format
@@ -932,7 +934,9 @@ class rebalance_portfolio:
         plot_end_date = re_optimize_results.index[-1]
         price_data = self.price_data.loc[plot_start_date:plot_end_date, ticker]
         ax1.plot(price_data, color="red", label=f"{ticker} prices")
-        ax1.set_title(plot_title if plot_title is not None else f"{ticker} weights vs. prices")
+        ax1.set_title(
+            plot_title if plot_title is not None else f"{ticker} weights vs. prices"
+        )
 
         ax2 = ax1.twinx()
         ax2.bar(
