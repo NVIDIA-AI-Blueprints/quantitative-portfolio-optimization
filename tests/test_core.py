@@ -17,7 +17,7 @@ from cufolio.portfolio import Portfolio
 from cufolio.utils import (
     calculate_log_returns,
     calculate_returns,
-    compute_abs_returns,
+    compute_linear_returns,
 )
 
 matplotlib.use("Agg")
@@ -87,11 +87,11 @@ class TestReturns:
         )
 
     def test_abs_returns_shape(self, price_data):
-        ret = compute_abs_returns(price_data, freq=1)
+        ret = compute_linear_returns(price_data, freq=1)
         assert ret.shape == (59, 3)
 
     def test_abs_returns_values(self, price_data):
-        ret = compute_abs_returns(price_data, freq=1)
+        ret = compute_linear_returns(price_data, freq=1)
         expected_first = price_data.iloc[1] - price_data.iloc[0]
         np.testing.assert_allclose(
             ret.iloc[0].values, expected_first.values, atol=1e-12

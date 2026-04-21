@@ -18,11 +18,16 @@
 import os
 from typing import Union
 
+from typing import Union
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import yfinance as yf
+
+from .cvar_parameters import CvarParameters
+from .mean_variance_parameters import MeanVarianceParameters
+from .settings import ReturnsComputeSettings, ScenarioGenerationSettings
 
 
 def get_input_data(filepath):
@@ -47,39 +52,34 @@ def get_input_data(filepath):
 def calculate_returns(
     input_dataset: Union[pd.DataFrame, str],
     regime_dict: dict = None,
-    returns_compute_settings: Union[dict, str] = None,
+    returns_compute_settings: ReturnsComputeSettings = None,
 ):
     """
-    preprocess the dat from a particular period of time.
-    Assuming the returns are log normally distributed, return the mean and
-    covariance of the log returns and the log returns
+    Preprocess price data and compute returns for a specified time period.
 
-    Parameters:
-    :input_dataset: pandas DataFrame or the path to the input dataset
-    :return_type: str, type of the returns. For example, "LOG" means log returns,
-            "PNL" means the dataset is already in the format of P&L data.
-            "LINEAR" means absolute returns.
-    :regime_dict: dict of the format {'name': , 'range':(start, end)}
-    :returns_compute_settings: Union[dict, str], dictionary containing returns calculation settings or the return type.
-            If a string is provided, it is the return type.
-            If a dictionary is provided, it contains the following keys:
-            - "return_type": str, type of the returns. For example, "LOG" means log returns,
-            - "freq": int, frequency of the returns. For example, freq = 1 means daily returns.
-            - "returns_compute_device": str, device to use for returns calculation. For example, "GPU" or "CPU".
-            - "verbose": bool, whether to print verbose output.
+    Calculates log returns (or other return types) and computes the mean
+    and covariance matrix for downstream portfolio optimization.
+
+    Parameters
+    ----------
+    input_dataset : pd.DataFrame or str
+        Price data as a DataFrame or path to the input dataset file.
+    regime_dict : dict, optional
+        Market regime specification with format {'name': str, 'range': (start, end)}.
+    returns_compute_settings : ReturnsComputeSettings, optional
+        Configuration for return calculation including return type, frequency,
+        and computation device. Uses defaults if not provided.
+
+    Returns
+    -------
+    dict
+        Dictionary containing computed returns, mean, covariance, and metadata.
     """
-    # set the default values for the returns calculation settings
-    if returns_compute_settings.get("returns_compute_device") is None:
-        returns_compute_settings["returns_compute_device"] = "CPU"
-    if returns_compute_settings.get("verbose") is None:
-        returns_compute_settings["verbose"] = False
-    if returns_compute_settings.get("freq") is None:
-        returns_compute_settings["freq"] = 1
-    if returns_compute_settings.get("return_type") is None:
-        returns_compute_settings["return_type"] = "LOG"
+    if returns_compute_settings is None:
+        returns_compute_settings = ReturnsComputeSettings()
 
-    return_type = returns_compute_settings["return_type"].upper()
-    freq = returns_compute_settings["freq"]
+    return_type = returns_compute_settings.return_type.upper()
+    freq = returns_compute_settings.freq
 
     if isinstance(input_dataset, str):
         input_data = get_input_data(input_dataset)
@@ -103,7 +103,9 @@ def calculate_returns(
     elif return_type == "PNL":
         returns_dataframe = input_data
     elif return_type == "LINEAR":
-        returns_dataframe = compute_abs_returns(input_data, freq)
+        returns_dataframe = compute_linear_returns(input_data, freq)
+    elif return_type == "ABSOLUTE":
+        returns_dataframe = compute_absolute_returns(input_data, freq)
     else:
         raise NotImplementedError("Invalid return type!")
 
@@ -127,16 +129,27 @@ def calculate_returns(
 def calculate_log_returns(price_data, freq=1):
     """compute the log returns given a price dataframe"""
     # compute the log returns
-    returns_dataframe = price_data.apply(np.log) - price_data.shift(freq).apply(np.log)
+    returns_dataframe = np.log(price_data / price_data.shift(freq))
+
+    return returns_dataframe.dropna(how="all").fillna(0)
+
+
+def compute_linear_returns(price_data, freq=1):
+    """
+    compute the simple returns using freq. For example, 
+    freq = 1 means (today - yesterday) / yesterday.
+    """
+    returns_dataframe = price_data.pct_change(freq)
     returns_dataframe = returns_dataframe.dropna(how="all")
     returns_dataframe = returns_dataframe.fillna(0)
 
     return returns_dataframe
 
 
-def compute_abs_returns(price_data, freq=1):
+def compute_absolute_returns(price_data, freq=1):
     """
-    compute the absolute returns using freq. For example, freq = 1 means today - yesterday.
+    compute the absolute returns using freq. 
+    For example, freq = 1 means today - yesterday.
     """
     returns_dataframe = price_data.diff(freq)
     returns_dataframe = returns_dataframe.dropna(how="all")
@@ -437,118 +450,391 @@ def portfolio_plot_with_backtest(
     plt.show()
 
 
-def compare_results(gpu_results, cpu_results):
+def compare_results(*results_list):
     """
-    Compare and display results from GPU and CPU solvers in tabular format.
+    Compare and display results from multiple solvers in tabular format.
 
     Args:
-        gpu_results: Results from GPU solver
-        cpu_results: Results from CPU solver
+        *results_list: Result dictionaries from different solvers.
     """
-    print("\n" + "=" * 60)
-    print("SOLVER COMPARISON")
-    print("=" * 60)
-
-    # Collect all available results
-    solvers = []
-    if gpu_results is not None:
-        # Determine GPU solver name based on results structure or default to cuOpt
-        gpu_name = "cuOpt (GPU)"  # Default name for GPU results
-        solvers.append((gpu_name, gpu_results))
-    if cpu_results is not None:
-        solvers.append((f"{cpu_results['solver']} (CPU)", cpu_results))
-
-    if len(solvers) == 0:
-        print("No results available from any solver")
+    results = [r for r in results_list if r is not None]
+    if not results:
+        print("No results available")
         return
 
-    # Print header
-    print(
-        f"{'Solver':<15} {'Solve Time (s)':<15} {'Objective':<12} "
-        f"{'Return':<10} {'CVaR':<10}"
+    # Find common numeric keys, sorted: solve time, obj, then rest
+    common = set.intersection(*[set(r.keys()) for r in results])
+    keys = sorted(
+        [k for k in common if k != "solver" and isinstance(results[0].get(k), (int, float))],
+        key=lambda x: (0 if x == "solve time" else 1 if x == "obj" else 2, x)
     )
-    print("-" * 65)
 
-    # Print results for each solver
-    for solver_name, results in solvers:
-        solve_time = results.get("solve time", 0)
-        objective = results.get("obj", 0)
-        portfolio_return = results.get("return", 0)
-        cvar = results.get("CVaR", 0)
+    # Print table
+    print("\n" + "=" * 70)
+    print("SOLVER COMPARISON")
+    print("=" * 70)
+    print(f"{'Solver':<15}" + "".join(f" {k:<12}" for k in keys))
+    print("-" * 70)
+    for r in results:
+        print(f"{r.get('solver', 'Unknown'):<15}" + "".join(f" {(r.get(k) or 0):<12.6f}" for k in keys))
 
-        print(
-            f"{solver_name:<15} {solve_time:<15.4f} {objective:<12.6f} "
-            f"{portfolio_return:<10.6f} {cvar:<10.6f}"
-        )
-
-    # Calculate and display objective differences if multiple results available
-    if len(solvers) > 1:
+    # Objective differences
+    if len(results) > 1 and "obj" in keys:
         print("\nObjective Differences:")
-        for i in range(len(solvers)):
-            for j in range(i + 1, len(solvers)):
-                solver1_name, results1 = solvers[i]
-                solver2_name, results2 = solvers[j]
-                obj_diff = abs(results1.get("obj", 0) - results2.get("obj", 0))
-                print(f"{solver1_name} vs {solver2_name}: {obj_diff:.8f}")
+        for i, r1 in enumerate(results):
+            for r2 in results[i + 1:]:
+                print(f"  {r1.get('solver')} vs {r2.get('solver')}: {abs(r1.get('obj', 0) - r2.get('obj', 0)):.8f}")
 
     print()  # Add blank line for better readability
 
 
-def download_data(dataset_dir):
+SP500_TICKERS = [
+    'A', 'AAPL', 'ABT', 'ACGL', 'ACN', 'ADBE', 'ADI', 'ADM', 'ADP', 'ADSK', 'AEE', 'AEP', 'AES', 'AFL', 'AIG', 'AIZ', 'AJG', 'AKAM', 'ALB', 'ALGN',
+    'ALL', 'AMAT', 'AMD', 'AME', 'AMGN', 'AMT', 'AMZN', 'AON', 'AOS', 'APA', 'APD', 'APH', 'ARE', 'ATO', 'AVB', 'AVY', 'AXON', 'AXP', 'AZO',
+    'BA', 'BAC', 'BALL', 'BAX', 'BBWI', 'BBY', 'BDX', 'BEN', 'BG', 'BIIB', 'BIO', 'BK', 'BKNG', 'BKR', 'BLK', 'BMY', 'BRO', 'BSX', 'BWA', 'BXP',
+    'C', 'CAG', 'CAH', 'CAT', 'CB', 'CBRE', 'CCI', 'CCL', 'CDNS', 'CHD', 'CHRW', 'CI', 'CINF', 'CL', 'CLX', 'CMA', 'CMCSA', 'CME', 'CMI', 'CMS',
+    'CNC', 'CNP', 'COF', 'COO', 'COP', 'COR', 'COST', 'CPB', 'CPRT', 'CPT', 'CRL', 'CRM', 'CSCO', 'CSGP', 'CSX', 'CTAS', 'CTRA', 'CTSH', 'CVS', 'CVX',
+    'D', 'DD', 'DE', 'DECK', 'DGX', 'DHI', 'DHR', 'DIS', 'DLR', 'DLTR', 'DOC', 'DOV', 'DPZ', 'DRI', 'DTE', 'DUK', 'DVA', 'DVN',
+    'EA', 'EBAY', 'ECL', 'ED', 'EFX', 'EG', 'EIX', 'EL', 'ELV', 'EMN', 'EMR', 'EOG', 'EQIX', 'EQR', 'EQT', 'ES', 'ESS', 'ETN', 'ETR', 'EVRG',
+    'EW', 'EXC', 'EXPD', 'EXR', 'F', 'FAST', 'FCX', 'FDS', 'FDX', 'FE', 'FFIV', 'FICO', 'FIS', 'FITB', 'FMC', 'FRT',
+    'GD', 'GE', 'GEN', 'GILD', 'GIS', 'GL', 'GLW', 'GOOG', 'GOOGL', 'GPC', 'GPN', 'GRMN', 'GS', 'GWW',
+    'HAL', 'HAS', 'HBAN', 'HD', 'HIG', 'HOLX', 'HON', 'HPQ', 'HRL', 'HSIC', 'HST', 'HSY', 'HUBB', 'HUM',
+    'IBM', 'IDXX', 'IEX', 'IFF', 'ILMN', 'INCY', 'INTC', 'INTU', 'IP', 'IRM', 'ISRG', 'IT', 'ITW', 'IVZ',
+    'J', 'JBHT', 'JBL', 'JCI', 'JKHY', 'JNJ', 'JPM', 'KEY', 'KIM', 'KLAC', 'KMB', 'KMX', 'KO', 'KR',
+    'L', 'LEN', 'LH', 'LHX', 'LIN', 'LKQ', 'LLY', 'LMT', 'LNT', 'LOW', 'LRCX', 'LUV', 'LVS',
+    'MAA', 'MAR', 'MAS', 'MCD', 'MCHP', 'MCK', 'MCO', 'MDLZ', 'MDT', 'MET', 'MGM', 'MHK', 'MKC', 'MKTX', 'MLM', 'MMC', 'MMM', 'MNST', 'MO', 'MOH',
+    'MOS', 'MPWR', 'MRK', 'MS', 'MSFT', 'MSI', 'MTB', 'MTCH', 'MTD', 'MU',
+    'NDAQ', 'NDSN', 'NEE', 'NEM', 'NFLX', 'NI', 'NKE', 'NOC', 'NRG', 'NSC', 'NTAP', 'NTRS', 'NUE', 'NVDA', 'NVR',
+    'O', 'ODFL', 'OKE', 'OMC', 'ON', 'ORCL', 'ORLY', 'OXY',
+    'PAYX', 'PCAR', 'PCG', 'PEG', 'PEP', 'PFE', 'PFG', 'PG', 'PGR', 'PH', 'PHM', 'PKG', 'PLD', 'PNC', 'PNR', 'PNW', 'POOL', 'PPG', 'PPL', 'PRU',
+    'PSA', 'PTC', 'PWR', 'QCOM',
+    'RCL', 'REG', 'REGN', 'RF', 'RHI', 'RJF', 'RL', 'RMD', 'ROK', 'ROL', 'ROP', 'ROST', 'RSG', 'RTX', 'RVTY',
+    'SBAC', 'SBUX', 'SCHW', 'SHW', 'SJM', 'SLB', 'SNA', 'SNPS', 'SO', 'SPG', 'SPGI', 'SRE', 'STE', 'STLD', 'STT', 'STX', 'STZ', 'SWK', 'SWKS', 'SYK',
+    'SYY', 'T', 'TAP', 'TDY', 'TECH', 'TER', 'TFC', 'TFX', 'TGT', 'TJX', 'TMO', 'TPR', 'TRMB', 'TROW', 'TRV', 'TSCO', 'TSN', 'TT', 'TTWO', 'TXN',
+    'TXT', 'TYL', 'UDR', 'UHS', 'UNH', 'UNP', 'UPS', 'URI', 'USB',
+    'VLO', 'VMC', 'VRSN', 'VRTX', 'VTR', 'VTRS', 'VZ',
+    'WAB', 'WAT', 'WDC', 'WEC', 'WELL', 'WFC', 'WM', 'WMB', 'WMT', 'WRB', 'WST', 'WTW', 'WY', 'WYNN',
+    'XEL', 'XOM', 'YUM', 'ZBH', 'ZBRA',
+]
+
+SP100_TICKERS = [
+    'AAPL', 'ABBV', 'ABT', 'ACN', 'ADBE', 'AIG', 'AMD', 'AMGN', 'AMT', 'AMZN',
+    'AVGO', 'AXP', 'BA', 'BAC', 'BK', 'BKNG', 'BLK', 'BMY', 'BRK-B', 'C',
+    'CAT', 'CHTR', 'CI', 'CL', 'CMCSA', 'COF', 'COP', 'COST', 'CRM', 'CSCO',
+    'CVS', 'CVX', 'DE', 'DHR', 'DIS', 'DUK', 'EMR', 'EXC', 'F', 'FDX',
+    'GD', 'GE', 'GILD', 'GM', 'GOOG', 'GOOGL', 'GS', 'HD', 'HON', 'IBM',
+    'INTC', 'INTU', 'ISRG', 'JNJ', 'JPM', 'KHC', 'KO', 'LIN', 'LLY', 'LMT',
+    'LOW', 'MA', 'MCD', 'MDLZ', 'MDT', 'MET', 'META', 'MMM', 'MO', 'MRK',
+    'MS', 'MSFT', 'NEE', 'NFLX', 'NKE', 'NOC', 'NVDA', 'ORCL', 'PEP', 'PFE',
+    'PG', 'PM', 'PYPL', 'QCOM', 'RTX', 'SBUX', 'SCHW', 'SLB', 'SO', 'SPG',
+    'T', 'TGT', 'TMO', 'TMUS', 'TSLA', 'TXN', 'UNH', 'UNP', 'UPS', 'USB',
+    'V', 'VZ', 'WFC', 'WMT', 'XOM',
+]
+
+DOW30_TICKERS = [
+    'AAPL', 'AMGN', 'AMZN', 'AXP', 'BA', 'CAT', 'CRM', 'CSCO', 'CVX', 'DIS',
+    'DOW', 'GS', 'HD', 'HON', 'IBM', 'INTC', 'JNJ', 'JPM', 'KO', 'MCD',
+    'MMM', 'MRK', 'MSFT', 'NKE', 'NVDA', 'PG', 'SHW', 'TRV', 'UNH', 'V',
+    'VZ', 'WMT',
+]
+
+DATASET_TICKERS = {
+    "sp500": SP500_TICKERS,
+    "sp100": SP100_TICKERS,
+    "dow30": DOW30_TICKERS,
+}
+
+
+def _download_tickers(tickers, output_path, start_date="2005-01-01",
+                       end_date="2025-01-01", batch_size=50):
+    """Download closing prices for a list of tickers and save to CSV."""
+    frames = []
+    for i in range(0, len(tickers), batch_size):
+        batch = tickers[i:i + batch_size]
+        batch_data = yf.download(batch, start=start_date, end=end_date, timeout=30)
+        frames.append(batch_data['Close'])
+
+    data = pd.concat(frames, axis=1)
+    # Drop tickers with >10% missing data, forward-fill the rest
+    threshold = len(data) * 0.9
+    data = data.dropna(axis=1, thresh=int(threshold))
+    data = data.ffill().dropna()
+    data.to_csv(output_path)
+    print(f"Saved {len(data.columns)} tickers to {output_path}")
+    return data
+
+
+def download_data(dataset_dir, batch_size=50, datasets=None):
+    """Download stock data for one or more datasets.
+
+    Parameters
+    ----------
+    dataset_dir : str
+        Directory to save CSV files (e.g. "data/stock_data").
+        If a .csv path is given, it is treated as the sp500 output path
+        for backward compatibility.
+    batch_size : int
+        Number of tickers to download per yfinance batch.
+    datasets : list of str, optional
+        Which datasets to download. Options: "sp500", "sp100", "dow30",
+        "global_titans". If None, downloads all.
     """
-    Download the data for the given dataset name.
+    if dataset_dir.endswith(".csv"):
+        _download_tickers(SP500_TICKERS, dataset_dir, batch_size=batch_size)
+        return
+
+    target_dir = os.path.dirname(dataset_dir) if os.path.isfile(dataset_dir) else dataset_dir
+    os.makedirs(target_dir, exist_ok=True)
+
+    if datasets is None:
+        datasets = list(DATASET_TICKERS.keys())
+
+    for name in datasets:
+        tickers = DATASET_TICKERS.get(name)
+        if tickers is None:
+            print(f"Unknown dataset '{name}', skipping. Available: {list(DATASET_TICKERS.keys())}")
+            continue
+        output_path = os.path.join(target_dir, f"{name}.csv")
+        print(f"Downloading {name} ({len(tickers)} tickers)...")
+        _download_tickers(tickers, output_path, batch_size=batch_size)
+
+
+def create_synthetic_stock_dataset(
+    training_directory: str, regime_name: str, regime_range: tuple, num_synthetic: int
+):
+    """Create synthetic stock dataset based on training data.
+
+    Args:
+        training_directory (str): Path to the training data directory.
+        regime_name (str): Name of the market regime.
+        regime_range (tuple): Date range for the regime (start_date, end_date).
+        num_synthetic (int): Number of synthetic datasets to generate.
+
+    Returns:
+        str: Path to the saved synthetic dataset file.
+
+    Raises:
+        ValueError: If num_synthetic is less than or equal to 0.
+
+    Example:
+        >>> training_dir = "data/stock_data/sp500.csv"
+        >>> regime = "bull_market"
+        >>> date_range = ("2020-01-01", "2021-12-31")
+        >>> save_path = create_synthetic_stock_dataset(
+        ...     training_dir,
+        ...     regime,
+        ...     date_range,
+        ...     num_synthetic=100
+        ... )
+        >>> print(save_path)  # data/stock_data/synthetic-bull_market-size_500.csv
     """
+    from . import scenario_generation  # Lazy import
 
-    # fmt: off
-    tickers = [
-        "A", "AAPL", "ABT", "ACGL", "ACN", "ADBE", "ADI", "ADM", "ADP", "ADSK",
-        "AEE", "AEP", "AES", "AFL", "AIG", "AIZ", "AJG", "AKAM", "ALB", "ALGN",
-        "ALL", "AMAT", "AMD", "AME", "AMGN", "AMT", "AMZN", "AON", "AOS", "APA",
-        "APD", "APH", "ARE", "ATO", "AVB", "AVY", "AXON", "AXP", "AZO", "BA",
-        "BAC", "BALL", "BAX", "BBWI", "BBY", "BDX", "BEN", "BG", "BIIB", "BIO",
-        "BK", "BKNG", "BKR", "BLK", "BMY", "BRO", "BSX", "BWA", "BXP", "C",
-        "CAG", "CAH", "CAT", "CB", "CBRE", "CCI", "CCL", "CDNS", "CHD", "CHRW",
-        "CI", "CINF", "CL", "CLX", "CMA", "CMCSA", "CME", "CMI", "CMS", "CNC",
-        "CNP", "COF", "COO", "COP", "COR", "COST", "CPB", "CPRT", "CPT", "CRL",
-        "CRM", "CSCO", "CSGP", "CSX", "CTAS", "CTRA", "CTSH", "CVS", "CVX", "D",
-        "DD", "DE", "DECK", "DGX", "DHI", "DHR", "DIS", "DLR", "DLTR", "DOC",
-        "DOV", "DPZ", "DRI", "DTE", "DUK", "DVA", "DVN", "EA", "EBAY", "ECL",
-        "ED", "EFX", "EG", "EIX", "EL", "ELV", "EMN", "EMR", "EOG", "EQIX",
-        "EQR", "EQT", "ES", "ESS", "ETN", "ETR", "EVRG", "EW", "EXC", "EXPD",
-        "EXR", "F", "FAST", "FCX", "FDS", "FDX", "FE", "FFIV", "FI", "FICO",
-        "FIS", "FITB", "FMC", "FRT", "GD", "GE", "GEN", "GILD", "GIS", "GL",
-        "GLW", "GOOG", "GOOGL", "GPC", "GPN", "GRMN", "GS", "GWW", "HAL", "HAS",
-        "HBAN", "HD", "HIG", "HOLX", "HON", "HPQ", "HRL", "HSIC", "HST", "HSY",
-        "HUBB", "HUM", "IBM", "IDXX", "IEX", "IFF", "ILMN", "INCY", "INTC", "INTU",
-        "IP", "IPG", "IRM", "ISRG", "IT", "ITW", "IVZ", "J", "JBHT", "JBL",
-        "JCI", "JKHY", "JNJ", "JPM", "K", "KEY", "KIM", "KLAC", "KMB", "KMX",
-        "KO", "KR", "L", "LEN", "LH", "LHX", "LIN", "LKQ", "LLY", "LMT",
-        "LNT", "LOW", "LRCX", "LUV", "LVS", "MAA", "MAR", "MAS", "MCD", "MCHP",
-        "MCK", "MCO", "MDLZ", "MDT", "MET", "MGM", "MHK", "MKC", "MKTX", "MLM",
-        "MMC", "MMM", "MNST", "MO", "MOH", "MOS", "MPWR", "MRK", "MS", "MSFT",
-        "MSI", "MTB", "MTCH", "MTD", "MU", "NDAQ", "NDSN", "NEE", "NEM", "NFLX",
-        "NI", "NKE", "NOC", "NRG", "NSC", "NTAP", "NTRS", "NUE", "NVDA", "NVR",
-        "O", "ODFL", "OKE", "OMC", "ON", "ORCL", "ORLY", "OXY", "PAYX", "PCAR",
-        "PCG", "PEG", "PEP", "PFE", "PFG", "PG", "PGR", "PH", "PHM", "PKG",
-        "PLD", "PNC", "PNR", "PNW", "POOL", "PPG", "PPL", "PRU", "PSA", "PTC",
-        "PWR", "QCOM", "RCL", "REG", "REGN", "RF", "RHI", "RJF", "RL", "RMD",
-        "ROK", "ROL", "ROP", "ROST", "RSG", "RTX", "RVTY", "SBAC", "SBUX", "SCHW",
-        "SHW", "SJM", "SLB", "SNA", "SNPS", "SO", "SPG", "SPGI", "SRE", "STE",
-        "STLD", "STT", "STX", "STZ", "SWK", "SWKS", "SYK", "SYY", "T", "TAP",
-        "TDY", "TECH", "TER", "TFC", "TFX", "TGT", "TJX", "TMO", "TPR", "TRMB",
-        "TROW", "TRV", "TSCO", "TSN", "TT", "TTWO", "TXN", "TXT", "TYL", "UDR",
-        "UHS", "UNH", "UNP", "UPS", "URI", "USB", "VLO", "VMC", "VRSN", "VRTX",
-        "VTR", "VTRS", "VZ", "WAB", "WAT", "WDC", "WEC", "WELL", "WFC", "WM",
-        "WMB", "WMT", "WRB", "WST", "WTW", "WY", "WYNN", "XEL", "XOM", "YUM",
-        "ZBH", "ZBRA",
-    ]
-    # fmt: on
+    if num_synthetic <= 0:
+        raise ValueError("Please provide a valid integer for num_synthetic!")
 
-    start_date = "2005-01-01"
-    end_date = "2025-01-01"
+    synthetic_data = scenario_generation.generate_synthetic_stock_data(
+        dataset_directory=training_directory,
+        num_synthetic=num_synthetic,
+        fit_range=regime_range,
+        generate_range=regime_range,
+    )
+    dataset_size = len(synthetic_data.columns)
 
-    data = yf.download(tickers, start=start_date, end=end_date, timeout=30)
+    save_name = "synthetic-" + regime_name + f"-size_{dataset_size}.csv"
+    save_path = os.path.join(os.path.dirname(training_directory), save_name)
+    synthetic_data.to_csv(save_path)
 
-    data = data["Close"].dropna(axis=1)
+    return save_path
 
-    data.to_csv(dataset_dir)
+
+def optimize_market_regimes(
+    input_file_name: str,
+    returns_compute_settings: ReturnsComputeSettings,
+    all_regimes: dict,
+    params: Union[CvarParameters, MeanVarianceParameters],
+    solver_settings_list: list[dict],
+    scenario_generation_settings: ScenarioGenerationSettings = None,
+    results_csv_file_name: str = None,
+    num_synthetic: int = 0,
+    print_results: bool = True,
+):
+    """
+    Compare optimization performance across different regimes and solvers.
+
+    Automatically detects whether to use CVaR or Mean-Variance optimization
+    based on the type of parameters passed.
+
+    Parameters
+    ----------
+    input_file_name : str
+        Path to input data file.
+    returns_compute_settings : ReturnsComputeSettings
+        Configuration for computing returns from price data.
+    all_regimes : dict
+        Dictionary of regimes to test with format {'regime_name': regime_range}.
+    params : CvarParameters or MeanVarianceParameters
+        Optimization parameters. The type determines which optimizer to use:
+        - CvarParameters: Uses CVaR optimization (requires scenario_generation_settings)
+        - MeanVarianceParameters: Uses Mean-Variance optimization
+    solver_settings_list : list[dict]
+        List of solver configurations to test.
+    scenario_generation_settings : ScenarioGenerationSettings, optional
+        Configuration for generating return scenarios. Required when using
+        CvarParameters, ignored for MeanVarianceParameters.
+    results_csv_file_name : str, optional
+        CSV filename to save results.
+    num_synthetic : int, optional
+        Number of synthetic data copies to generate (0 = none).
+        Only applicable for CVaR optimization.
+    print_results : bool, optional
+        Whether to print optimization results.
+
+    Returns
+    -------
+    pd.DataFrame
+        Results dataframe with solver performance metrics per regime.
+
+    Raises
+    ------
+    ValueError
+        If CvarParameters is passed without scenario_generation_settings.
+        If params is neither CvarParameters nor MeanVarianceParameters.
+    """
+    # Determine optimization type and risk measure based on params type
+    if isinstance(params, CvarParameters):
+        if scenario_generation_settings is None:
+            raise ValueError(
+                "scenario_generation_settings is required when using Mean-CVaR optimization"
+            )
+        risk_measure = "CVaR"
+        from . import cvar_optimizer  # Lazy import
+        from . import cvar_utils  # For generate_cvar_data
+    elif isinstance(params, MeanVarianceParameters):
+        risk_measure = "variance"
+        from . import mean_variance_optimizer  # Lazy import
+    else:
+        raise ValueError(
+            f"params must be either CvarParameters or MeanVarianceParameters, "
+            f"got {type(params).__name__}"
+        )
+
+    if len(solver_settings_list) == 0:
+        raise ValueError("Please provide at least one solver settings!")
+
+    # Helper function to extract solver name from settings
+    def get_solver_name(settings):
+        """Extract solver name from solver settings dict."""
+        if "solver" in settings:
+            solver_obj = settings["solver"]
+            return str(solver_obj).replace("cp.", "").replace("solvers.", "")
+        else:
+            raise ValueError(f"Please provide a solver name in the format 'solver': <solver_name>")
+
+    # Build column names dynamically based on solvers
+    columns = ["regime"]
+    solver_names = []
+    for settings in solver_settings_list:
+        solver_name = get_solver_name(settings)
+        solver_names.append(solver_name)
+        columns.extend(
+            [
+                f"{solver_name}-obj",
+                f"{solver_name}-solve_time",
+                f"{solver_name}-return",
+                f"{solver_name}-{risk_measure}",
+                f"{solver_name}-optimal_portfolio",
+            ]
+        )
+
+    result_rows = []
+
+    for regime_name, regime_range in all_regimes.items():
+        print("=" * 70)
+        print(f"Processing Regime: {regime_name}")
+        print("=" * 70)
+
+        # Handle synthetic data generation (CVaR only)
+        if risk_measure == "CVaR" and num_synthetic > 0:
+            input_data_directory = create_synthetic_stock_dataset(
+                input_file_name, regime_name, regime_range, num_synthetic
+            )
+        else:
+            input_data_directory = input_file_name
+
+        # Create returns_dict for the current regime
+        curr_regime = {"name": regime_name, "range": regime_range}
+        returns_dict = calculate_returns(
+            input_data_directory, curr_regime, returns_compute_settings
+        )
+
+        # Generate CVaR scenario data if needed
+        if risk_measure == "CVaR":
+            returns_dict = cvar_utils.generate_cvar_data(
+                returns_dict, scenario_generation_settings
+            )
+
+        # Initialize result row for this regime
+        result_row = {"regime": regime_name}
+
+        # Solve with each solver
+        for idx, solver_settings in enumerate(solver_settings_list):
+            solver_name = solver_names[idx]
+            print(f"\n--- Testing Solver: {solver_name} ---")
+
+            # Set up optimization problem based on risk measure
+            if risk_measure == "CVaR":
+                problem = cvar_optimizer.CVaR(
+                    returns_dict=returns_dict, cvar_params=params
+                )
+            else:
+                problem = mean_variance_optimizer.MeanVariance(
+                    returns_dict=returns_dict, mean_variance_params=params
+                )
+
+            # Solve optimization problem
+            try:
+                result, portfolio = problem.solve_optimization_problem(
+                    solver_settings, print_results=print_results
+                )
+
+                # Store results with solver-specific column names
+                result_row[f"{solver_name}-obj"] = result["obj"]
+                result_row[f"{solver_name}-solve_time"] = result["solve time"]
+                result_row[f"{solver_name}-return"] = result["return"]
+                result_row[f"{solver_name}-{risk_measure}"] = result.get(
+                    risk_measure, result.get(risk_measure.lower(), None)
+                )
+                result_row[f"{solver_name}-optimal_portfolio"] = portfolio.print_clean(
+                    verbose=False
+                )
+
+                print(
+                    f"  ✓ {solver_name} - Objective: {result['obj']:.6f}, "
+                    f"Time: {result['solve time']:.4f}s"
+                    f"--------------------------------"
+                )
+
+            except Exception as e:
+                print(f"  ✗ {solver_name} failed: {str(e)}")
+                result_row[f"{solver_name}-obj"] = None
+                result_row[f"{solver_name}-solve_time"] = None
+                result_row[f"{solver_name}-return"] = None
+                result_row[f"{solver_name}-{risk_measure}"] = None
+                result_row[f"{solver_name}-optimal_portfolio"] = None
+
+        result_rows.append(result_row)
+
+    # Create DataFrame from collected rows
+    result_dataframe = pd.DataFrame(result_rows, columns=columns)
+
+    print("\n" + "=" * 70)
+    print("Optimization Complete!")
+    print("=" * 70)
+    print("\n")
+
+    if results_csv_file_name:
+        result_dataframe.to_csv(results_csv_file_name, index=False)
+        print(f"Results saved to: {results_csv_file_name}")
+
+    return result_dataframe

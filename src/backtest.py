@@ -485,7 +485,7 @@ class portfolio_backtester:
         NotImplementedError
             If return type is not supported
         """
-        if self._return_type == "LOG" or self._return_type == "LINEAR":
+        if self._return_type in ("LOG", "LINEAR", "ABSOLUTE", "PNL"):
             # compute Sharpe Ratio, Sortino Ratio, and Max Drawdown (MDD)
             portfolio_returns = self._compute_portfolio_returns_with_cash(
                 portfolio.weights, portfolio.cash
@@ -494,7 +494,9 @@ class portfolio_backtester:
                 portfolio.name, portfolio_returns, portfolio.cash
             )
         else:
-            raise NotImplementedError("Return type not supported yet!")
+            raise NotImplementedError(
+                f"Return type '{self._return_type}' not supported yet!"
+            )
 
         return backtest_result
 
@@ -520,9 +522,23 @@ class portfolio_backtester:
         mean_return = np.mean(returns) + cash * self.risk_free_rate
         excess_returns = returns - self.risk_free_rate
         if self._return_type == "LINEAR":
-            cumulative_returns = np.cumsum(returns)
+            # Linear returns compound multiplicatively: (1+r1)*(1+r2)*...
+            cumulative_returns = np.cumprod(1 + returns)
         elif self._return_type == "LOG":
+            # Log returns are additive, exponentiate to get growth factor
             cumulative_returns = np.exp(np.cumsum(returns))
+        elif self._return_type == "ABSOLUTE":
+            # Absolute returns (price differences) sum to cumulative P&L
+            # Add 1 to represent initial portfolio value for consistent scaling
+            cumulative_returns = np.cumsum(returns)
+        elif self._return_type == "PNL":
+            # P&L data sums to cumulative P&L
+            # Add 1 to represent initial portfolio value for consistent scaling
+            cumulative_returns = np.cumsum(returns)
+        else:
+            raise NotImplementedError(
+                f"Return type '{self._return_type}' not supported for cumulative returns"
+            )
 
         sharpe = self.sharpe_ratio(excess_returns)
         sortino = self.sortino_ratio(excess_returns)
@@ -617,17 +633,11 @@ class portfolio_backtester:
         float
             Maximum drawdown as a decimal (e.g., 0.20 for 20% drawdown)
         """
-        # Convert log returns to cumulative portfolio values
-
-        # Initial portfolio value (assuming it starts at 1 for simplicity)
-        initial_portfolio_value = 1
-        portfolio_values = initial_portfolio_value * cumulative_returns
-
         # Compute the running maximum
-        running_max = np.maximum.accumulate(portfolio_values)
+        running_max = np.maximum.accumulate(cumulative_returns)
 
         # Compute the max drawdown
-        drawdown = (running_max - portfolio_values) / running_max
+        drawdown = (running_max - cumulative_returns) / running_max
         max_drawdown = np.max(drawdown)
 
         return max_drawdown

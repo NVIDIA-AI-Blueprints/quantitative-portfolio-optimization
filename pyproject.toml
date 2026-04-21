@@ -3,14 +3,15 @@ name = "cufolio"
 version = "25.10"
 description = "Quantitative Portfolio Optimization developer example"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "numpy==2.2.6",
-    "pandas==2.3.2",
-    "cvxpy==1.7.3",
-    "scikit-learn==1.7.1",
-    "seaborn==0.13.2",
+    "numpy>=2.0.0",
+    "pandas>=2.0",
+    "cvxpy>=1.7.0",
+    "scikit-learn>=1.5",
+    "seaborn>=0.13",
     "yfinance>=0.2.0",
+    "pydantic>=2.12.5",
 ]
 
 [project.optional-dependencies]
@@ -20,18 +21,17 @@ dev = [
     "pre-commit==4.3.0",
 ]
 cuda12 = [
-    "cuml-cu12==25.12.*",
-    "cuopt-cu12==25.12.*",
+    "cuml-cu12==26.4.*",
+    "cuopt-cu12==26.04.*",
 ]
 cuda13 = [
-    "cuml-cu13==25.12.*",
-    "cuopt-cu13==25.12.*",
+    "cuml-cu13==26.4.*",
+    "cuopt-cu13==26.04.*",
 ]
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
-extend-exclude = ["notebooks"]
+target-version = ['py311']
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

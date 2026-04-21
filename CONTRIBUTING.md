@@ -31,7 +31,7 @@ There are many ways to contribute to Quantitative Portfolio Optimization develop
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - CUDA-capable GPU (for GPU-accelerated features)
 - NVIDIA PyTorch container or equivalent CUDA environment
 
@@ -286,7 +286,7 @@ What actually happened.
 
 **Environment**
 - OS: [e.g., Ubuntu 22.04]
-- Python: [e.g., 3.10]
+- Python: [e.g., 3.11]
 - CUDA: [e.g., 12.2]
 - GPU: [e.g., A100]
 - NVIDIA Quantitative Portfolio Optimization developer example version: [e.g., 25.10]

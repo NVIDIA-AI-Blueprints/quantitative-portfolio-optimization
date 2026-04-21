@@ -12,30 +12,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""cufolio: GPU-accelerated portfolio optimization with cuOpt."""
-
-version = "1.0.0"
+from typing import Optional
 
 from .base_parameters import BaseParameters
-from .cvar_data import CvarData
-from .cvar_parameters import CvarParameters
-from .mean_variance_parameters import MeanVarianceParameters
-from .settings import (
-    ApiSettings,
-    KDESettings,
-    ReturnsComputeSettings,
-    ScenarioGenerationSettings,
-)
 
-__all__ = [
-    "BaseParameters",
-    "CvarData",
-    "CvarParameters",
-    "MeanVarianceParameters",
-    "ApiSettings",
-    "KDESettings",
-    "ReturnsComputeSettings",
-    "ScenarioGenerationSettings",
-    "version",
-]
+
+class MeanVarianceParameters(BaseParameters):
+    """
+    User-tunable parameters and constraint limits for Mean-Variance optimization.
+
+    Extends BaseParameters with a Mean-Variance-specific optional hard limit
+    on portfolio variance (``var_limit``).
+    """
+
+    # Mean-Variance-specific field
+    var_limit: Optional[float] = None
+
+    def validate_var_limit(self, value: Optional[float]) -> Optional[float]:
+        if value is not None:
+            if not isinstance(value, float) or value <= 0:
+                raise ValueError("Variance limit must be positive.")
+        return value

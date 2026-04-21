@@ -13,9 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-import os
-import pickle
 import time
 from typing import Optional
 
@@ -26,6 +23,7 @@ import pandas as pd
 from . import base_optimizer, cvar_utils
 from .cvar_parameters import CvarParameters
 from .portfolio import Portfolio
+from .settings import ApiSettings
 
 """
 Module: CVaR Optimization
@@ -113,54 +111,28 @@ class CVaR(base_optimizer.BaseOptimizer):
         self,
         returns_dict: dict,
         cvar_params: CvarParameters,
-        api_settings: dict = None,
+        api_settings: Optional[ApiSettings] = None,
         existing_portfolio: Optional[Portfolio] = None,
     ):
         """Initialize CVaR optimizer with data and constraints.
 
         Parameters
         ----------
-        returns_dict: dict
+        returns_dict : dict
             Input data containing regime info and CvarData instance.
-        cvar_params: CvarParameters
+        cvar_params : CvarParameters
             Constraint parameters and optimization settings (deep-copied).
-        api_settings: dict, default None
-            API configuration dictionary. If None, defaults to CVXPY with bounds.
-            Structure: {
-                'api': str,  # "cvxpy" or "cuopt_python"
-                'weight_constraints_type': str,  # "parameter" or "bounds" (CVXPY only)
-                'cash_constraints_type': str,   # "parameter" or "bounds" (CVXPY only)
-                'pickle_save_path': str, optional  # Path to save CVXPY problem
-            }
-        existing_portfolio: Portfolio, optional
+        api_settings : ApiSettings, optional
+            API configuration including solver choice and constraint types.
+            Uses CVXPY with bounds if not provided.
+        existing_portfolio : Portfolio, optional
             An existing portfolio to measure the turnover from.
         """
-        super().__init__(returns_dict, existing_portfolio, "CVaR")
+        super().__init__(
+            returns_dict, cvar_params, api_settings, existing_portfolio, "CVaR"
+        )
 
-        # Set default api_settings if not provided
-        if api_settings is None:
-            api_settings = {
-                "api": "cvxpy",
-                "weight_constraints_type": "bounds",
-                "cash_constraints_type": "bounds",
-            }
-
-        # Validate and store API settings
-        self._validate_api_settings(api_settings)
-        self.api_settings = api_settings
-        self.api_choice = api_settings["api"]
-
-        self.regime_name = returns_dict["regime"]["name"]
-        self.regime_range = returns_dict["regime"]["range"]
         self.data = returns_dict["cvar_data"]
-        self.covariance = returns_dict["covariance"]
-        self.existing_portfolio = existing_portfolio
-        self.params = self._store_cvar_params(cvar_params)
-
-        # Set up the optimization problem based on API choice
-        self._setup_optimization_problem()
-
-        self.optimal_portfolio = None
 
         self._result_columns = [
             "regime",
@@ -171,105 +143,7 @@ class CVaR(base_optimizer.BaseOptimizer):
             "obj",
         ]
 
-    def _store_cvar_params(self, cvar_params: CvarParameters):
-        """
-        Store the CVaR parameters in the optimizer.
-
-        If w_min and w_max are input as floats, convert them to ndarrays
-        with the same value repeated for all assets. Otherwise, store
-        the ndarrays as is in the deepcopy.
-        """
-        params_copy = copy.deepcopy(cvar_params)
-
-        params_copy.w_min = self._update_weight_constraints(params_copy.w_min)
-        params_copy.w_max = self._update_weight_constraints(params_copy.w_max)
-
-        return params_copy
-
-    def _validate_api_settings(self, api_settings: dict):
-        """
-        Validate the API settings dictionary.
-
-        Parameters
-        ----------
-        api_settings: dict
-            API configuration dictionary to validate
-
-        Raises
-        ------
-        ValueError
-            If api_settings structure is invalid
-        """
-        if not isinstance(api_settings, dict):
-            raise ValueError("api_settings must be a dictionary")
-
-        # Validate API choice
-        valid_apis = ["cvxpy", "cuopt_python"]
-        api = api_settings.get("api")
-        if api not in valid_apis:
-            raise ValueError(f"Invalid API '{api}'. Must be one of {valid_apis}")
-
-        # Validate constraint types (only for CVXPY)
-        if api == "cvxpy":
-            valid_constraint_types = ["parameter", "bounds"]
-
-            weight_type = api_settings.get("weight_constraints_type", "bounds")
-            if weight_type not in valid_constraint_types:
-                raise ValueError(
-                    f"Invalid weight_constraints_type '{weight_type}'. "
-                    f"Must be one of {valid_constraint_types}"
-                )
-
-            cash_type = api_settings.get("cash_constraints_type", "bounds")
-            if cash_type not in valid_constraint_types:
-                raise ValueError(
-                    f"Invalid cash_constraints_type '{cash_type}'. "
-                    f"Must be one of {valid_constraint_types}"
-                )
-
-            # Validate pickle_save_path if provided
-            pickle_path = api_settings.get("pickle_save_path")
-            if pickle_path is not None and not isinstance(pickle_path, str):
-                raise ValueError("pickle_save_path must be a string if provided")
-
-            # Set defaults if not provided
-            api_settings.setdefault("weight_constraints_type", "bounds")
-            api_settings.setdefault("cash_constraints_type", "bounds")
-
-    def _setup_optimization_problem(self):
-        """
-        Set up the optimization problem based on the selected API choice.
-
-        This unified method handles setup for both CVXPY and cuOpt APIs:
-        - Times the setup process
-        - Scales risk aversion parameter
-        - Calls the appropriate API-specific setup method
-        """
-        set_up_start = time.time()  # Record setup start time
-        self._scale_risk_aversion()  # Adjust risk aversion parameter
-
-        # Call the appropriate setup method based on API choice
-        if self.api_choice == "cvxpy":
-            self._setup_cvxpy_problem()
-            self._assign_cvxpy_parameter_values()
-
-            # Save problem to pickle if requested
-            pickle_path = self.api_settings.get("pickle_save_path")
-            if pickle_path is not None:
-                self._save_problem_pickle(pickle_path)
-
-        elif self.api_choice == "cuopt_python":
-            (
-                self._cuopt_problem,
-                self._cuopt_variables,
-                self.cuopt_timing_dict,
-            ) = self._setup_cuopt_problem()
-        else:
-            # This should never happen due to validation, but add for safety
-            raise ValueError(f"Unsupported api_choice: {self.api_choice}")
-
-        set_up_end = time.time()
-        self.set_up_time = set_up_end - set_up_start
+        self._setup_optimization_problem()
 
     def _scale_risk_aversion(self):
         """
@@ -354,7 +228,7 @@ class CVaR(base_optimizer.BaseOptimizer):
         num_scen = len(self.data.p)
 
         # Create variables based on constraint type settings
-        if self.api_settings["weight_constraints_type"] == "bounds":
+        if self.api_settings.weight_constraints_type == "bounds":
             # Use variable bounds for weight constraints
             self.w = cp.Variable(
                 num_assets,
@@ -367,7 +241,7 @@ class CVaR(base_optimizer.BaseOptimizer):
             self.w_min_param = cp.Parameter(num_assets, name="w_min")
             self.w_max_param = cp.Parameter(num_assets, name="w_max")
 
-        if self.api_settings["cash_constraints_type"] == "bounds":
+        if self.api_settings.cash_constraints_type == "bounds":
             # Use variable bounds for cash constraints
             self.c = cp.Variable(
                 1, name="cash", bounds=[self.params.c_min, self.params.c_max]
@@ -396,14 +270,14 @@ class CVaR(base_optimizer.BaseOptimizer):
 
         # Add variable bounds constraints (only if using parameter constraints)
         constraints = []
-        if self.api_settings["weight_constraints_type"] == "parameter":
+        if self.api_settings.weight_constraints_type == "parameter":
             constraints.extend(
                 [
                     self.w_min_param <= self.w,
                     self.w <= self.w_max_param,
                 ]
             )
-        if self.api_settings["cash_constraints_type"] == "parameter":
+        if self.api_settings.cash_constraints_type == "parameter":
             constraints.extend(
                 [
                     self.c_min_param <= self.c,
@@ -422,7 +296,7 @@ class CVaR(base_optimizer.BaseOptimizer):
             y = cp.Variable(num_assets, boolean=True, name="cardinality")
 
             # Handle cardinality constraints based on weight constraint type
-            if self.api_settings["weight_constraints_type"] == "parameter":
+            if self.api_settings.weight_constraints_type == "parameter":
                 constraints.extend(
                     [
                         cp.multiply(self.w_min_param, y) <= self.w,
@@ -489,35 +363,12 @@ class CVaR(base_optimizer.BaseOptimizer):
         # store the optimization problem
         self.optimization_problem = cp.Problem(obj, constraints)
 
-    def _assign_cvxpy_parameter_values(self):
-        """
-        Assign values to all CVXPY parameters from current data and parameter settings.
-
-        This function should be called after the CVXPY problem is set up and whenever
-        parameter values need to be updated without rebuilding the entire problem.
-        """
-        # Assign basic constraint parameters (only if they exist as parameters)
-        if self.api_settings["weight_constraints_type"] == "parameter":
-            self.w_min_param.value = self.params.w_min
-            self.w_max_param.value = self.params.w_max
-
-        if self.api_settings["cash_constraints_type"] == "parameter":
-            self.c_min_param.value = self.params.c_min
-            self.c_max_param.value = self.params.c_max
-
-        # Assign optimization parameters (always parameters)
-        self.risk_aversion_param.value = self.params.risk_aversion
-        self.L_tar_param.value = self.params.L_tar
-
-        # Assign optional parameters
-        if self.params.T_tar is not None:
-            self.T_tar_param.value = self.params.T_tar
-
+    def _assign_subclass_cvxpy_params(self):
         if self.params.cvar_limit is not None:
             self.cvar_limit_param.value = self.params.cvar_limit
 
-        if self.params.cardinality is not None:
-            self.cardinality_param.value = self.params.cardinality
+    def _get_cvxpy_risk_metric_value(self):
+        return self.cvar_risk.value[0]
 
     def _setup_cuopt_problem(self):
         """
@@ -847,27 +698,6 @@ class CVaR(base_optimizer.BaseOptimizer):
 
         return problem, variables, timing_dict
 
-    def _print_cuopt_timing(self, timing_dict):
-        """Print detailed timing information for cuOpt problem setup loops.
-
-        Parameters
-        ----------
-        timing_dict : dict
-            Dictionary containing timing information for each setup phase.
-        """
-        print("\ncuOpt SETUP TIMING BREAKDOWN")
-        print(f"{'-' * 40}")
-        total_time = sum(timing_dict.values())
-        for phase, time_taken in timing_dict.items():
-            percentage = (time_taken / total_time * 100) if total_time > 0 else 0
-            print(
-                f"{phase.replace('_', ' ').title():<25}: {time_taken:.6f}s "
-                f"({percentage:.1f}%)"
-            )
-        print(f"{'-' * 40}")
-        print(f"{'Total Setup Time':<25}: {total_time:.6f}s (100.0%)")
-        print()
-
     def _solve_cuopt_problem(self, solver_settings: dict = None):
         """
         Solve CVaR optimization using cuOpt.
@@ -945,85 +775,7 @@ class CVaR(base_optimizer.BaseOptimizer):
 
         return result_row, weights, cash
 
-    def _solve_cvxpy_problem(self, solver_settings: dict):
-        """
-        solve the optimization problem using the user-specified solver and settings
-
-        Parameters
-        ----------
-        solver_settings: dict
-            Solver configuration dict for CVXPY.Problem.solve().
-            Example: {"solver": cp.CLARABEL, "verbose": True}
-
-        Returns
-        -------
-        result_row: pd.Series
-            Performance metrics: regime, solve_time, return, CVaR, objective.
-        weights: np.ndarray
-            Optimal asset weights.
-        cash: float
-            Optimal cash allocation.
-        """
-
-        self.optimization_problem.solve(**solver_settings)
-        weights = self.w.value
-        cash = self.c.value
-
-        solver_stats = getattr(self.optimization_problem, "solver_stats", None)
-
-        reported_solve_time = (
-            getattr(solver_stats, "solve_time", None)
-            if solver_stats is not None
-            else None
-        )
-        if reported_solve_time is None:
-            print("no reported solve time!!!")
-        solver_time = (
-            float(reported_solve_time)
-            if reported_solve_time is not None
-            else self.optimization_problem._solve_time
-        )
-
-        self.cvxpy_api_overhead = (
-            self.optimization_problem._solve_time - solver_time
-            if reported_solve_time is not None
-            else None
-        )
-
-        result_row = pd.Series(
-            [
-                self.regime_name,
-                str(solver_settings["solver"]),
-                solver_time,
-                self.expected_ptf_returns.value,
-                self.cvar_risk.value[0],
-                self.optimization_problem.value,
-            ],
-            index=self._result_columns,
-        )
-
-        return result_row, weights, cash
-
-    def _save_problem_pickle(self, pickle_save_path: str):
-        """
-        Save the CVXPY optimization problem to a pickle file.
-
-        Parameters
-        ----------
-        pickle_save_path : str
-            Path where to save the pickle file
-        """
-        try:
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(pickle_save_path), exist_ok=True)
-
-            with open(pickle_save_path, "wb") as f:
-                pickle.dump(self.optimization_problem, f)
-            print(f"CVaR problem saved to: {pickle_save_path}")
-        except Exception as e:
-            print(f"Warning: Failed to save CVaR problem to pickle: {e}")
-
-    def _print_CVaR_results(
+    def _print_results(
         self,
         result_row: pd.Series,
         portfolio: Portfolio,
@@ -1107,96 +859,7 @@ class CVaR(base_optimizer.BaseOptimizer):
 
         print(f"{'=' * 60}\n")
 
-    def solve_optimization_problem(
-        self, solver_settings: dict = None, print_results: bool = True
-    ):
-        """
-        Unified solve method that calls the appropriate API-specific solver.
-
-        This method automatically calls the correct solver based on the api_choice
-        specified during initialization.
-
-        Parameters
-        ----------
-        solver_settings : dict, optional
-            Solver configuration. Format depends on API choice:
-            - CVXPY: {"solver": cp.CLARABEL, "verbose": True}
-            - cuOpt: {"pdlp_solver_mode": 1, "log_to_console": False}
-            If None, uses default settings for the chosen API.
-        print_results : bool, default True
-            Enable formatted result output to console.
-
-        Returns
-        -------
-        result_row : pd.Series
-            Performance metrics: regime, solve_time, return, CVaR, objective.
-        portfolio : Portfolio
-            Optimized portfolio with weights and cash allocation.
-
-        Raises
-        ------
-        ValueError
-            If api_choice is not supported or required settings are missing.
-        """
-        time_results = {}
-
-        # Call appropriate solve method based on API choice
-        if self.api_choice == "cvxpy":
-            if solver_settings is None or solver_settings.get("solver") is None:
-                raise ValueError("A solver must be provided for CVXPY API")
-            result_row, weights, cash = self._solve_cvxpy_problem(solver_settings)
-            portfolio_name = str(solver_settings["solver"]) + "_optimal"
-        elif self.api_choice == "cuopt_python":
-            result_row, weights, cash = self._solve_cuopt_problem(solver_settings)
-            portfolio_name = "cuOpt_optimal"
-        else:
-            raise ValueError(f"Unsupported api_choice: {self.api_choice}")
-
-        # Create portfolio object with results
-        portfolio = Portfolio(
-            name=portfolio_name,
-            tickers=self.tickers,
-            weights=weights,
-            cash=cash,
-            time_range=self.regime_range,
-        )
-
-        # Print results if requested
-        if print_results:
-            self._print_CVaR_results(result_row, portfolio, time_results)
-
-        return result_row, portfolio
-
-    def _extract_problem_cone_data(self, problem_data_dir: str):
-        """
-        Extract the cone data from the problem and save to pickle file.
-        Parameters for benchmarking conic solvers.
-        ----------
-        problem_data_dir: str
-            Path where to save the pickle file
-        """
-
-        data = self.optimization_problem.get_problem_data("SCS")
-        P = data[0].get("P", None)
-        q = data[0].get("c", None)  # CVXPy uses 'c', Clarabel uses 'q'
-        A = data[0].get("A", None)
-        b = data[0].get("b", None)
-        dims = data[0].get("dims", None)
-
-        # Create directory if it doesn't exist
-        os.makedirs(problem_data_dir, exist_ok=True)
-
-        # Create specific filename with problem details
+    def _get_cone_data_filename(self):
         regime_name = getattr(self, "regime_name", "unknown")
         num_scenarios = getattr(self.params, "num_scen", "unknown")
-
-        filename = f"cvar_{regime_name}_{num_scenarios}scen.pkl"
-        pickle_file_path = os.path.join(problem_data_dir, filename)
-
-        # Save the entire data object as pickle
-        with open(pickle_file_path, "wb") as f:
-            pickle.dump(data, f)
-
-        print(f"Problem data saved to: {pickle_file_path}")
-
-        return P, q, A, b, dims
+        return f"cvar_{regime_name}_{num_scenarios}scen.pkl"
