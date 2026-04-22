@@ -3,6 +3,12 @@
 All notable changes to this project are documented here, one PR per entry,
 newest first, dated by merge to `main`. Backfilled from git history.
 
+## 2026-04-22 — PR #TBD
+
+Add `CHANGELOG.md`, backfilled from `git log --merges --first-parent origin/main`.
+One entry per merged PR, newest first, `## YYYY-MM-DD — PR #N` headers.
+No source/config changes.
+
 ## 2026-04-21 — PR #34
 
 **Breaking — minimum Python bumped from `>=3.10` to `>=3.11`.** Required by
