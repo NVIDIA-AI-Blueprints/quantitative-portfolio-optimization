@@ -41,7 +41,7 @@ Large bundled change:
   covariance matrix.
 - Notebooks rewritten against the new API; outputs regenerated.
 
-## 2025-12-17 — PR #1 (from fork)
+## 2025-12-17 — PR from fork (phuo-nv)
 
 - **Changed** — cuOpt model construction switched to `LinearExpression` to
   avoid recursion depth errors on large problems.
