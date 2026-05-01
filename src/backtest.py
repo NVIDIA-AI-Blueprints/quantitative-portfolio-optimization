@@ -86,7 +86,11 @@ class portfolio_backtester:
             benchmark_portfolios
         )
 
-        self._dates = returns_dict["dates"]
+        self._dates = pd.to_datetime(returns_dict["dates"])
+        (
+            self._cumulative_dates,
+            self._prepend_cumulative_anchor,
+        ) = self._build_cumulative_dates(returns_dict)
         self._return_type = returns_dict["return_type"]
         self._return_mean = returns_dict["mean"]
         self._covariance = returns_dict["covariance"]
@@ -108,6 +112,28 @@ class portfolio_backtester:
             "sortino",
             "max drawdown",
         ]
+
+    @property
+    def cumulative_dates(self):
+        """Dates corresponding to the cumulative return/value series."""
+        return self._cumulative_dates
+
+    def _build_cumulative_dates(self, returns_dict):
+        """Build cumulative-value dates, including an explicit start anchor."""
+        cumulative_dates = pd.DatetimeIndex(self._dates)
+        regime = returns_dict.get("regime", {})
+        regime_range = regime.get("range") if isinstance(regime, dict) else None
+
+        if len(cumulative_dates) == 0 or not regime_range:
+            return cumulative_dates, False
+
+        start_date = pd.Timestamp(regime_range[0])
+        first_return_date = pd.Timestamp(cumulative_dates[0])
+        if start_date < first_return_date:
+            cumulative_dates = pd.DatetimeIndex([start_date]).append(cumulative_dates)
+            return cumulative_dates, True
+
+        return cumulative_dates, False
 
     def _generate_benchmark_portfolios(self, benchmark_portfolios):
         """
@@ -325,7 +351,9 @@ class portfolio_backtester:
 
             # Prepare data for plotting
             cumulative_returns_dataframe = pd.DataFrame(
-                [], index=pd.to_datetime(self._dates), columns=backtest_results.index
+                [],
+                index=pd.to_datetime(self.cumulative_dates),
+                columns=backtest_results.index,
             )
 
             for ptf_name, row in backtest_results.iterrows():
@@ -435,12 +463,16 @@ class portfolio_backtester:
                 if len(self._dates) > 0:
                     try:
                         # Try to use strftime if it's a datetime object
-                        start_date = self._dates[0].strftime("%Y%m%d")
-                        end_date = self._dates[-1].strftime("%Y%m%d")
+                        start_date = self.cumulative_dates[0].strftime("%Y%m%d")
+                        end_date = self.cumulative_dates[-1].strftime("%Y%m%d")
                     except AttributeError:
                         # If it's a string, convert to datetime first
-                        start_date = pd.to_datetime(self._dates[0]).strftime("%Y%m%d")
-                        end_date = pd.to_datetime(self._dates[-1]).strftime("%Y%m%d")
+                        start_date = pd.to_datetime(self.cumulative_dates[0]).strftime(
+                            "%Y%m%d"
+                        )
+                        end_date = pd.to_datetime(self.cumulative_dates[-1]).strftime(
+                            "%Y%m%d"
+                        )
                 else:
                     start_date = "unknown"
                     end_date = "unknown"
@@ -521,6 +553,7 @@ class portfolio_backtester:
         """
         mean_return = np.mean(returns) + cash * self.risk_free_rate
         excess_returns = returns - self.risk_free_rate
+        returns_array = returns.to_numpy() if hasattr(returns, "to_numpy") else returns
         if self._return_type == "LINEAR":
             # Linear returns compound multiplicatively: (1+r1)*(1+r2)*...
             cumulative_returns = np.cumprod(1 + returns)
@@ -540,14 +573,19 @@ class portfolio_backtester:
                 f"Return type '{self._return_type}' not supported for cumulative returns"
             )
 
+        if self._prepend_cumulative_anchor:
+            cumulative_returns = np.concatenate(
+                ([1.0], np.asarray(cumulative_returns))
+            )
+
         sharpe = self.sharpe_ratio(excess_returns)
         sortino = self.sortino_ratio(excess_returns)
         mdd = self.max_drawdown(cumulative_returns)
 
         result = pd.Series(
             [
-                returns.to_numpy(),
-                cumulative_returns.to_numpy(),
+                np.asarray(returns_array),
+                np.asarray(cumulative_returns),
                 portfolio_name,
                 mean_return,
                 sharpe,

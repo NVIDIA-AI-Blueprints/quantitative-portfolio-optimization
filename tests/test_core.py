@@ -471,6 +471,47 @@ class TestBacktester:
         mdd = results.loc["test", "max drawdown"]
         assert 0 <= mdd <= 1, "max drawdown should be between 0 and 1"
 
+    def test_cumulative_returns_anchor_to_regime_start(self):
+        dates = pd.to_datetime(
+            ["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05"]
+        )
+        prices = pd.DataFrame(
+            {
+                "AAPL": [100.0, 101.0, 102.0, 103.0],
+                "GOOGL": [50.0, 49.0, 50.0, 51.0],
+                "MSFT": [200.0, 200.0, 202.0, 204.0],
+            },
+            index=dates,
+        )
+        returns_dict = calculate_returns(
+            prices,
+            regime_dict={"name": "test", "range": ("2024-01-02", "2024-01-05")},
+            returns_compute_settings=ReturnsComputeSettings(
+                return_type="LINEAR", freq=1
+            ),
+        )
+        portfolio = Portfolio(
+            name="test",
+            tickers=TICKERS,
+            weights=np.array([0.5, 0.5, 0.0]),
+            cash=0.0,
+        )
+        bt = portfolio_backtester(
+            test_portfolio=portfolio,
+            returns_dict=returns_dict,
+            risk_free_rate=0.0,
+            benchmark_portfolios=[],
+        )
+
+        result = bt.backtest_single_portfolio(portfolio)
+        cumulative_returns = result["cumulative returns"].iloc[0]
+
+        assert bt.cumulative_dates[0] == pd.Timestamp("2024-01-02")
+        assert bt.cumulative_dates[1] == pd.Timestamp("2024-01-03")
+        assert len(cumulative_returns) == len(bt.cumulative_dates)
+        assert cumulative_returns[0] == pytest.approx(1.0)
+        assert cumulative_returns[1] == pytest.approx(0.995)
+
     def test_drawdown_known_series(self):
         values = np.array([1.0, 1.1, 1.05, 0.9, 0.95, 1.0])
         bt = portfolio_backtester.__new__(portfolio_backtester)

@@ -68,6 +68,8 @@ def generate_samples_kde(
     """
     if kde_settings is None:
         kde_settings = KDESettings()
+    elif isinstance(kde_settings, dict):
+        kde_settings = KDESettings(**kde_settings)
 
     kde_device = kde_settings.device
     bandwidth = kde_settings.bandwidth
