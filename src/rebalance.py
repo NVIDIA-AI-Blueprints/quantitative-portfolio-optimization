@@ -306,13 +306,15 @@ class rebalance_portfolio:
                 backtest_result["cumulative returns"].values[0] * portfolio_value
             )
 
-            cumulative_portfolio_value_array = np.concatenate(
-                (cumulative_portfolio_value_array, cur_cumulative_portfolio_returns)
+            (
+                cumulative_portfolio_value_array,
+                cumulative_portfolio_value_dates,
+            ) = self._append_cumulative_period(
+                cumulative_portfolio_value_array,
+                cumulative_portfolio_value_dates,
+                cur_cumulative_portfolio_returns,
+                backtester.cumulative_dates,
             )
-
-            # Extract actual trading dates from the backtester object
-            backtest_period_dates = backtester._dates
-            cumulative_portfolio_value_dates.extend(backtest_period_dates)
 
             # update portfolio value
             portfolio_value_pct_change = self._calculate_pct_change(backtest_result)
@@ -363,13 +365,15 @@ class rebalance_portfolio:
                 current_portfolio, tail_returns, benchmark_portfolios=None
             )
             tail_result = tail_bt.backtest_single_portfolio(current_portfolio)
-            cumulative_portfolio_value_array = np.concatenate(
-                (
-                    cumulative_portfolio_value_array,
-                    tail_result["cumulative returns"].values[0] * portfolio_value,
-                )
+            (
+                cumulative_portfolio_value_array,
+                cumulative_portfolio_value_dates,
+            ) = self._append_cumulative_period(
+                cumulative_portfolio_value_array,
+                cumulative_portfolio_value_dates,
+                tail_result["cumulative returns"].values[0] * portfolio_value,
+                tail_bt.cumulative_dates,
             )
-            cumulative_portfolio_value_dates.extend(tail_bt._dates)
 
         # Convert to pandas Series with dates as index, ensuring proper datetime format
         cumulative_portfolio_value_dates_clean = pd.to_datetime(
@@ -405,6 +409,29 @@ class rebalance_portfolio:
             )
 
         return results_dataframe, re_optimize_dates, cumulative_portfolio_value
+
+    @staticmethod
+    def _append_cumulative_period(
+        cumulative_values,
+        cumulative_dates,
+        period_values,
+        period_dates,
+    ):
+        """Append an anchored cumulative period without duplicating boundaries."""
+        period_values = np.asarray(period_values)
+        period_dates = list(pd.to_datetime(period_dates))
+
+        if cumulative_dates and period_dates:
+            if pd.Timestamp(cumulative_dates[-1]) == pd.Timestamp(period_dates[0]):
+                period_values = period_values[1:]
+                period_dates = period_dates[1:]
+
+        if len(period_values) == 0:
+            return cumulative_values, cumulative_dates
+
+        cumulative_values = np.concatenate((cumulative_values, period_values))
+        cumulative_dates.extend(period_dates)
+        return cumulative_values, cumulative_dates
 
     def _calculate_pct_change(self, backtest_result: pd.DataFrame):
         """Calculate percentage change in portfolio value over backtest period.
