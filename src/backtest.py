@@ -574,9 +574,7 @@ class portfolio_backtester:
             )
 
         if self._prepend_cumulative_anchor:
-            cumulative_returns = np.concatenate(
-                ([1.0], np.asarray(cumulative_returns))
-            )
+            cumulative_returns = np.concatenate(([1.0], np.asarray(cumulative_returns)))
 
         sharpe = self.sharpe_ratio(excess_returns)
         sortino = self.sortino_ratio(excess_returns)
